@@ -1,6 +1,9 @@
 const utils = require('@iobroker/adapter-core');
-const axios = require('axios');
+const { wrapper } = require('axios-cookiejar-support');
 const { CookieJar } = require('tough-cookie');
+
+// Axios mit Cookie-Jar-Unterstützung wrappen
+const axios = wrapper(require('axios'));
 
 /**
  * Oilview API Manager
@@ -33,41 +36,63 @@ class OilviewAPI {
     }
 
     /**
-     * Login bei Oilview mit CSRF-Token
+     * Login bei Oilview (Laravel Sanctum / Cookie-basiert)
+     * 1. CSRF-Cookie (XSRF-TOKEN) holen
+     * 2. POST /api/v2/login mit X-XSRF-TOKEN Header
      */
     async login() {
         try {
             this.adapter.log.info('[Oilview] Logging in...');
 
-            // Schritt 1: CSRF-Token holen
-            const loginPageResponse = await axios.get(`${this.baseUrl}/login`, {
-                jar: this.cookieJar,
-                withCredentials: true,
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                }
-            });
+            const headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            };
 
-            // CSRF-Token aus dem Login-Formular extrahieren (Annahme: Token im HTML)
-            const csrfMatch = loginPageResponse.data.match(/name="_csrf"\s+value="([^"]+)"/);
-            if (!csrfMatch) {
-                throw new Error('[Oilview] CSRF-Token nicht gefunden');
+            // Schritt 1: CSRF-Cookie holen (Laravel Sanctum Standard)
+            let xsrfToken = null;
+            try {
+                await axios.get(`${this.baseUrl}/api/v2/csrf-token`, {
+                    jar: this.cookieJar,
+                    headers
+                });
+            } catch (e) {
+                // Fallback: Startseite holen
+                try {
+                    await axios.get(this.baseUrl, {
+                        jar: this.cookieJar,
+                        headers
+                    });
+                } catch (e2) {
+                    this.adapter.log.debug('[Oilview] CSRF-Cookie konnte nicht geladen werden: ' + e2.message);
+                }
             }
-            const csrfToken = csrfMatch[1];
-            this.adapter.log.debug('[Oilview] CSRF-Token extrahiert');
 
-            // Schritt 2: Login durchführen
-            const loginResponse = await axios.post(`${this.baseUrl}/api/v2/login`, {
+            const cookies = await this.cookieJar.getCookieString(this.baseUrl);
+            this.adapter.log.debug('[Oilview] Cookies nach Init: ' + cookies);
+
+            // XSRF-TOKEN aus dem Cookie-Jar extrahieren und dekodieren
+            const xsrfCookie = await this.cookieJar.getCookie('XSRF-TOKEN');
+            if (xsrfCookie) {
+                xsrfToken = decodeURIComponent(xsrfCookie.value);
+            }
+
+            // Schritt 2: Login durchführen (JSON)
+            const loginPayload = {
                 username: this.username,
-                password: this.password,
-                _csrf: csrfToken
-            }, {
+                password: this.password
+            };
+
+            const loginHeaders = { ...headers, 'Content-Type': 'application/json', 'Accept': 'application/json' };
+            if (xsrfToken) {
+                loginHeaders['X-XSRF-TOKEN'] = xsrfToken;
+                loginHeaders['X-CSRF-TOKEN'] = xsrfToken;
+            }
+
+            const loginResponse = await axios.post(`${this.baseUrl}/api/v2/login`, loginPayload, {
                 jar: this.cookieJar,
-                withCredentials: true,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                }
+                headers: loginHeaders,
+                maxRedirects: 5,
+                validateStatus: status => status < 400
             });
 
             if (loginResponse.status === 200 || loginResponse.status === 201) {
@@ -78,6 +103,9 @@ class OilviewAPI {
             }
         } catch (error) {
             this.adapter.log.error(`[Oilview] Login failed: ${error.message}`);
+            if (error.response) {
+                this.adapter.log.error(`[Oilview] Response status: ${error.response.status}, body: ${JSON.stringify(error.response.data).substring(0, 500)}`);
+            }
             this.isLoggedIn = false;
             throw error;
         }

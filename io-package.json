@@ -1,72 +1,82 @@
 {
-  "common": {
-    "name": "tankmonitor",
-    "version": "0.0.1",
-    "news": {
-      "0.0.1": {
-        "en": "initial release",
-        "de": "Erstveröffentlichung"
-      }
+    "common": {
+        "name": "tankmonitor",
+        "version": "0.0.1",
+        "news": {
+            "0.0.1": {
+                "en": "initial release",
+                "de": "Erstveröffentlichung"
+            }
+        },
+        "titleLang": {
+            "en": "Tankmonitor",
+            "de": "Tankmonitor"
+        },
+        "desc": {
+            "en": "Adapter to read tank levels from LiquidCheck (Grafana), Tankinhaltsanzeige and Oilview",
+            "de": "Adapter zum Auslesen von Tankinhalt aus LiquidCheck (Grafana), Tankinhaltsanzeige und Oilview"
+        },
+        "authors": [
+            "Matthias Ulrich <matthias@ulrich.dev>"
+        ],
+        "keywords": [
+            "tank",
+            "tanklevel",
+            "monitoring",
+            "oilview",
+            "liquidcheck",
+            "fuel"
+        ],
+        "license": "MIT",
+        "platform": "Javascript/Node.js",
+        "icon": "tankmonitor.png",
+        "enabled": true,
+        "mode": "daemon",
+        "type": "general",
+        "adminUI": {
+            "config": "json"
+        },
+        "dependencies": [
+            {
+                "js-controller": ">=6.0.11"
+            }
+        ],
+        "globalDependencies": [
+            {
+                "admin": ">=7.0.23"
+            }
+        ]
     },
-    "title": "Tankmonitor",
-    "titleLang": {
-      "de": "Tankmonitor"
-    },
-    "desc": {
-      "en": "Adapter to read tank levels from LiquidCheck (Grafana), Tankinhaltsanzeige and Oilview",
-      "de": "Adapter zum Auslesen von Tankinhalt aus LiquidCheck (Grafana), Tankinhaltsanzeige und Oilview"
-    },
-    "authors": [
-      "Matthias Ulrich <matthias@ulrich.dev>"
+    "encryptedNative": [
+        "liquidCheck.password",
+        "tankinhaltsanzeige.password",
+        "oilview.password"
     ],
-    "keywords": [
-      "ioBroker",
-      "tank",
-      "tanklevel",
-      "monitoring",
-      "oilview",
-      "liquidcheck",
-      "fuel"
-    ],
-    "license": "MIT",
-    "platform": "Javascript/Node.js",
-    "main": "main.js",
-    "icon": "tankmonitor.png",
-    "jsonConfig": "admin/jsonConfig.json",
-    "type": "monitoring",
-    "types": [
-      "js-controller"
-    ],
-    "materialize": true,
-    "files": [
-      "admin/schema.json"
-    ]
-  },
-  "native": {
-    "liquidCheck": {
-      "enabled": false,
-      "url": "https://liquidcheck.si-elektronik.de",
-      "username": "",
-      "password": "",
-      "interval": 5
+    "native": {
+        "liquidCheck": {
+            "enabled": false,
+            "url": "https://liquidcheck.si-elektronik.de",
+            "username": "",
+            "password": "",
+            "interval": 5
+        },
+        "tankinhaltsanzeige": {
+            "enabled": false,
+            "url": "https://www.tankinhaltsanzeige.de",
+            "username": "",
+            "password": "",
+            "interval": 30
+        },
+        "oilview": {
+            "enabled": false,
+            "url": "https://www.oilview.de",
+            "username": "",
+            "password": "",
+            "interval": 15
+        }
     },
-    "tankinhaltsanzeige": {
-      "enabled": false,
-      "url": "https://www.tankinhaltsanzeige.de",
-      "username": "",
-      "password": "",
-      "interval": 30
-    },
-    "oilview": {
-      "enabled": false,
-      "url": "https://www.oilview.de",
-      "username": "",
-      "password": "",
-      "interval": 15
-    }
-  },
-  "instanceObjects": [],
-  "instanceStates": [],
-  "objects": [],
-  "states": []
+    "instanceObjects": [],
+    "instanceStates": [],
+    "objects": [],
+    "states": []
 }
