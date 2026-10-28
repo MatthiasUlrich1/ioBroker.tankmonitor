@@ -1,0 +1,143 @@
+{
+    "i18n": true,
+    "type": "panel",
+    "items": {
+        "oilview.enabled": {
+            "type": "checkbox",
+            "label": "Oilview enabled",
+            "newLine": true,
+            "xs": 12,
+            "sm": 6,
+            "md": 4,
+            "lg": 3,
+            "xl": 2
+        },
+        "oilview.username": {
+            "type": "text",
+            "label": "Oilview username",
+            "newLine": true,
+            "xs": 12,
+            "sm": 6,
+            "md": 4,
+            "lg": 3,
+            "xl": 2
+        },
+        "oilview.password": {
+            "type": "password",
+            "label": "Oilview password",
+            "newLine": true,
+            "xs": 12,
+            "sm": 6,
+            "md": 4,
+            "lg": 3,
+            "xl": 2
+        },
+        "oilview.interval": {
+            "type": "number",
+            "label": "Oilview interval (minutes)",
+            "min": 5,
+            "default": 15,
+            "newLine": true,
+            "xs": 12,
+            "sm": 6,
+            "md": 4,
+            "lg": 3,
+            "xl": 2
+        },
+        "tankinhaltsanzeige.enabled": {
+            "type": "checkbox",
+            "label": "Tankinhaltsanzeige enabled",
+            "newLine": true,
+            "xs": 12,
+            "sm": 6,
+            "md": 4,
+            "lg": 3,
+            "xl": 2
+        },
+        "tankinhaltsanzeige.username": {
+            "type": "text",
+            "label": "Tankinhaltsanzeige username",
+            "newLine": true,
+            "xs": 12,
+            "sm": 6,
+            "md": 4,
+            "lg": 3,
+            "xl": 2
+        },
+        "tankinhaltsanzeige.password": {
+            "type": "password",
+            "label": "Tankinhaltsanzeige password",
+            "newLine": true,
+            "xs": 12,
+            "sm": 6,
+            "md": 4,
+            "lg": 3,
+            "xl": 2
+        },
+        "tankinhaltsanzeige.interval": {
+            "type": "number",
+            "label": "Tankinhaltsanzeige interval (minutes)",
+            "min": 5,
+            "default": 30,
+            "newLine": true,
+            "xs": 12,
+            "sm": 6,
+            "md": 4,
+            "lg": 3,
+            "xl": 2
+        },
+        "liquidCheck.enabled": {
+            "type": "checkbox",
+            "label": "LiquidCheck enabled",
+            "newLine": true,
+            "xs": 12,
+            "sm": 6,
+            "md": 4,
+            "lg": 3,
+            "xl": 2
+        },
+        "liquidCheck.url": {
+            "type": "text",
+            "label": "LiquidCheck URL",
+            "default": "https://liquidcheck.si-elektronik.de",
+            "newLine": true,
+            "xs": 12,
+            "sm": 6,
+            "md": 4,
+            "lg": 3,
+            "xl": 2
+        },
+        "liquidCheck.username": {
+            "type": "text",
+            "label": "LiquidCheck username",
+            "newLine": true,
+            "xs": 12,
+            "sm": 6,
+            "md": 4,
+            "lg": 3,
+            "xl": 2
+        },
+        "liquidCheck.password": {
+            "type": "password",
+            "label": "LiquidCheck password",
+            "newLine": true,
+            "xs": 12,
+            "sm": 6,
+            "md": 4,
+            "lg": 3,
+            "xl": 2
+        },
+        "liquidCheck.interval": {
+            "type": "number",
+            "label": "LiquidCheck interval (minutes)",
+            "min": 5,
+            "default": 5,
+            "newLine": true,
+            "xs": 12,
+            "sm": 6,
+            "md": 4,
+            "lg": 3,
+            "xl": 2
+        }
+    }
+}

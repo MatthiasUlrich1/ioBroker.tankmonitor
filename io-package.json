@@ -32,7 +32,7 @@
     "platform": "Javascript/Node.js",
     "main": "main.js",
     "icon": "tankmonitor.png",
-    "schema": "admin/schema.json",
+    "jsonConfig": "admin/jsonConfig.json",
     "type": "monitoring",
     "types": [
       "js-controller"
