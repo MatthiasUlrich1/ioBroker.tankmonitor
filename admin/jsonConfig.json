@@ -1,0 +1,119 @@
+{
+    "i18n": false,
+    "type": "panel",
+    "items": {
+        "oilview": {
+            "type": "panel",
+            "label": "Oilview Settings",
+            "items": {
+                "oilview.enabled": {
+                    "type": "checkbox",
+                    "label": "Enable Oilview",
+                    "xs": 12,
+                    "sm": 6
+                },
+                "oilview.username": {
+                    "type": "text",
+                    "label": "Username / E-Mail",
+                    "xs": 12,
+                    "sm": 6,
+                    "hidden": "!data.oilview.enabled"
+                },
+                "oilview.password": {
+                    "type": "password",
+                    "label": "Password",
+                    "xs": 12,
+                    "sm": 6,
+                    "hidden": "!data.oilview.enabled"
+                },
+                "oilview.interval": {
+                    "type": "number",
+                    "label": "Interval (Minutes)",
+                    "min": 5,
+                    "default": 15,
+                    "xs": 12,
+                    "sm": 6,
+                    "hidden": "!data.oilview.enabled"
+                }
+            }
+        },
+        "tankinhaltsanzeige": {
+            "type": "panel",
+            "label": "Tankinhaltsanzeige Settings",
+            "items": {
+                "tankinhaltsanzeige.enabled": {
+                    "type": "checkbox",
+                    "label": "Enable Tankinhaltsanzeige",
+                    "xs": 12,
+                    "sm": 6
+                },
+                "tankinhaltsanzeige.username": {
+                    "type": "text",
+                    "label": "Username / E-Mail",
+                    "xs": 12,
+                    "sm": 6,
+                    "hidden": "!data.tankinhaltsanzeige.enabled"
+                },
+                "tankinhaltsanzeige.password": {
+                    "type": "password",
+                    "label": "Password",
+                    "xs": 12,
+                    "sm": 6,
+                    "hidden": "!data.tankinhaltsanzeige.enabled"
+                },
+                "tankinhaltsanzeige.interval": {
+                    "type": "number",
+                    "label": "Interval (Minutes)",
+                    "min": 5,
+                    "default": 30,
+                    "xs": 12,
+                    "sm": 6,
+                    "hidden": "!data.tankinhaltsanzeige.enabled"
+                }
+            }
+        },
+        "liquidCheck": {
+            "type": "panel",
+            "label": "LiquidCheck (Grafana) Settings",
+            "items": {
+                "liquidCheck.enabled": {
+                    "type": "checkbox",
+                    "label": "Enable LiquidCheck",
+                    "xs": 12,
+                    "sm": 6
+                },
+                "liquidCheck.url": {
+                    "type": "text",
+                    "label": "Grafana URL",
+                    "default": "https://liquidcheck.si-elektronik.de",
+                    "xs": 12,
+                    "sm": 6,
+                    "hidden": "!data.liquidCheck.enabled"
+                },
+                "liquidCheck.username": {
+                    "type": "text",
+                    "label": "Username / E-Mail",
+                    "xs": 12,
+                    "sm": 6,
+                    "hidden": "!data.liquidCheck.enabled"
+                },
+                "liquidCheck.password": {
+                    "type": "password",
+                    "label": "Password",
+                    "xs": 12,
+                    "sm": 6,
+                    "hidden": "!data.liquidCheck.enabled"
+                },
+                "liquidCheck.interval": {
+                    "type": "number",
+                    "label": "Interval (Minutes)",
+                    "min": 5,
+                    "default": 5,
+                    "xs": 12,
+                    "sm": 6,
+                    "hidden": "!data.liquidCheck.enabled"
+                }
+            }
+        }
+    }
+}
