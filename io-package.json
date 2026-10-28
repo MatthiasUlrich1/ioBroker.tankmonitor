@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "tankmonitor",
-    "version": "0.0.3",
+    "version": "0.0.4",
     "news": {
+      "0.0.4": {
+        "en": "Fix state creation: use flat config keys (jsonConfig dot-notation), prevent adapter stop on single platform init failure, add debug logging around object/state creation",
+        "de": "State-Erstellung behoben: flache Config-Keys (Punkt-Notation von jsonConfig) nutzen, Adapter-Stop bei Init-Fehler einzelner Plattformen verhindern, Debug-Logging rund um Objekt/State-Erstellung"
+      },
       "0.0.3": {
         "en": "Fixed Admin UI (jsonConfig.json reference) and version bump",
         "de": "Admin UI fix (jsonConfig.json Referenz) und Versionsstand"

@@ -12,10 +12,10 @@ const axios = wrapper(require('axios'));
 class OilviewAPI {
     constructor(adapter) {
         this.adapter = adapter;
-        this.baseUrl = this.adapter.config.oilview.url || 'https://www.oilview.de';
-        this.username = this.adapter.config.oilview.username;
-        this.password = this.adapter.config.oilview.password;
-        this.interval = (this.adapter.config.oilview.interval || 15) * 60 * 1000; // Minuten zu ms
+        this.baseUrl = this.adapter.config['oilview.url'] || 'https://www.oilview.de';
+        this.username = this.adapter.config['oilview.username'];
+        this.password = this.adapter.config['oilview.password'];
+        this.interval = (this.adapter.config['oilview.interval'] || 15) * 60 * 1000; // Minuten zu ms
         this.cookieJar = new CookieJar();
         this.sessionToken = null;
         this.devices = [];
@@ -28,10 +28,14 @@ class OilviewAPI {
      */
     async init() {
         this.adapter.log.info('[Oilview] Initializing with interval: ' + (this.interval / 60000) + ' minutes');
-        await this.login();
-        if (this.isLoggedIn) {
-            await this.discoverDevices();
-            this.startPolling();
+        try {
+            await this.login();
+            if (this.isLoggedIn) {
+                await this.discoverDevices();
+                this.startPolling();
+            }
+        } catch (e) {
+            this.adapter.log.error('[Oilview] Initialisierung fehlgeschlagen: ' + e.message);
         }
     }
 
@@ -67,11 +71,9 @@ class OilviewAPI {
                 }
             }
 
-            const cookies = await this.cookieJar.getCookieString(this.baseUrl);
-            this.adapter.log.debug('[Oilview] Cookies nach Init: ' + cookies);
-
             // XSRF-TOKEN aus dem Cookie-Jar extrahieren und dekodieren
-            const xsrfCookie = await this.cookieJar.getCookie('XSRF-TOKEN');
+            const cookiesInJar = await this.cookieJar.getCookies(this.baseUrl);
+            const xsrfCookie = cookiesInJar.find(c => c.key === 'XSRF-TOKEN');
             if (xsrfCookie) {
                 xsrfToken = decodeURIComponent(xsrfCookie.value);
             }
@@ -153,6 +155,7 @@ class OilviewAPI {
         this.adapter.log.debug(`[Oilview] Creating states for device: ${deviceId}`);
 
         // Device-Ordner erstellen
+        this.adapter.log.debug('[Oilview] Creating device channel object: ' + devicePath);
         await this.adapter.extendObjectAsync(devicePath, {
             type: 'channel',
             common: {
@@ -160,6 +163,7 @@ class OilviewAPI {
             },
             native: {}
         });
+        this.adapter.log.debug('[Oilview] Created device channel object: ' + devicePath);
 
         // Standard-States erstellen
         const states = [
@@ -173,6 +177,7 @@ class OilviewAPI {
         ];
 
         for (const state of states) {
+            this.adapter.log.debug(`[Oilview] Creating state: ${devicePath}.${state.id}`);
             await this.adapter.extendObjectAsync(`${devicePath}.${state.id}`, {
                 type: 'state',
                 common: {
@@ -185,6 +190,7 @@ class OilviewAPI {
                 },
                 native: {}
             });
+            this.adapter.log.debug(`[Oilview] Created state: ${devicePath}.${state.id}`);
         }
     }
 
@@ -239,40 +245,24 @@ class OilviewAPI {
         const devicePath = `oilview.${deviceId}`;
 
         try {
-            await this.adapter.setStateAsync(`${devicePath}.levelPercent`, {
-                val: data.levelPercent || data.level_percent || null,
-                ack: true
-            });
+            this.adapter.log.debug(`[Oilview] Updating states for device: ${deviceId}`);
+            
+            const stateUpdates = [
+                { id: 'levelPercent', val: data.levelPercent || data.level_percent || null },
+                { id: 'levelLiters', val: data.levelLiters || data.level_liters || data.volume || null },
+                { id: 'temperature', val: data.temperature || data.temp || null },
+                { id: 'battery', val: data.battery || data.batteryLevel || null },
+                { id: 'signalStrength', val: data.signalStrength || data.signal_strength || data.rssi || null },
+                { id: 'lastUpdate', val: new Date().toISOString() },
+                { id: 'deviceName', val: data.name || deviceId }
+            ];
 
-            await this.adapter.setStateAsync(`${devicePath}.levelLiters`, {
-                val: data.levelLiters || data.level_liters || data.volume || null,
-                ack: true
-            });
-
-            await this.adapter.setStateAsync(`${devicePath}.temperature`, {
-                val: data.temperature || data.temp || null,
-                ack: true
-            });
-
-            await this.adapter.setStateAsync(`${devicePath}.battery`, {
-                val: data.battery || data.batteryLevel || null,
-                ack: true
-            });
-
-            await this.adapter.setStateAsync(`${devicePath}.signalStrength`, {
-                val: data.signalStrength || data.signal_strength || data.rssi || null,
-                ack: true
-            });
-
-            await this.adapter.setStateAsync(`${devicePath}.lastUpdate`, {
-                val: new Date().toISOString(),
-                ack: true
-            });
-
-            await this.adapter.setStateAsync(`${devicePath}.deviceName`, {
-                val: data.name || deviceId,
-                ack: true
-            });
+            for (const update of stateUpdates) {
+                await this.adapter.setStateAsync(`${devicePath}.${update.id}`, {
+                    val: update.val,
+                    ack: true
+                });
+            }
 
             this.adapter.log.debug(`[Oilview] Updated states for device ${deviceId}`);
         } catch (error) {
@@ -318,10 +308,10 @@ class OilviewAPI {
 class TankinhaltsanzeigeAPI {
     constructor(adapter) {
         this.adapter = adapter;
-        this.baseUrl = this.adapter.config.tankinhaltsanzeige.url || 'https://www.tankinhaltsanzeige.de';
-        this.username = this.adapter.config.tankinhaltsanzeige.username;
-        this.password = this.adapter.config.tankinhaltsanzeige.password;
-        this.interval = (this.adapter.config.tankinhaltsanzeige.interval || 30) * 60 * 1000;
+        this.baseUrl = this.adapter.config['tankinhaltsanzeige.url'] || 'https://www.tankinhaltsanzeige.de';
+        this.username = this.adapter.config['tankinhaltsanzeige.username'];
+        this.password = this.adapter.config['tankinhaltsanzeige.password'];
+        this.interval = (this.adapter.config['tankinhaltsanzeige.interval'] || 30) * 60 * 1000;
         this.cookieJar = new CookieJar();
         this.sessionToken = null;
         this.stations = [];
@@ -334,10 +324,14 @@ class TankinhaltsanzeigeAPI {
      */
     async init() {
         this.adapter.log.info('[Tankinhaltsanzeige] Initializing with interval: ' + (this.interval / 60000) + ' minutes');
-        await this.login();
-        if (this.isLoggedIn) {
-            await this.discoverStations();
-            this.startPolling();
+        try {
+            await this.login();
+            if (this.isLoggedIn) {
+                await this.discoverStations();
+                this.startPolling();
+            }
+        } catch (e) {
+            this.adapter.log.error('[Tankinhaltsanzeige] Initialisierung fehlgeschlagen: ' + e.message);
         }
     }
 
@@ -462,6 +456,7 @@ class TankinhaltsanzeigeAPI {
         this.adapter.log.debug(`[Tankinhaltsanzeige] Creating states for station: ${stationId}`);
 
         // Station-Ordner erstellen
+        this.adapter.log.debug('[Tankinhaltsanzeige] Creating station channel object: ' + stationPath);
         await this.adapter.extendObjectAsync(stationPath, {
             type: 'channel',
             common: {
@@ -469,6 +464,7 @@ class TankinhaltsanzeigeAPI {
             },
             native: {}
         });
+        this.adapter.log.debug('[Tankinhaltsanzeige] Created station channel object: ' + stationPath);
 
         // Standard-States erstellen
         const states = [
@@ -483,6 +479,7 @@ class TankinhaltsanzeigeAPI {
         ];
 
         for (const state of states) {
+            this.adapter.log.debug(`[Tankinhaltsanzeige] Creating state: ${stationPath}.${state.id}`);
             await this.adapter.extendObjectAsync(`${stationPath}.${state.id}`, {
                 type: 'state',
                 common: {
@@ -495,6 +492,7 @@ class TankinhaltsanzeigeAPI {
                 },
                 native: {}
             });
+            this.adapter.log.debug(`[Tankinhaltsanzeige] Created state: ${stationPath}.${state.id}`);
         }
     }
 
@@ -543,45 +541,25 @@ class TankinhaltsanzeigeAPI {
         const stationPath = `tankinhaltsanzeige.${stationId}`;
 
         try {
-            await this.adapter.setStateAsync(`${stationPath}.levelPercent`, {
-                val: data.levelPercent || data.fuellstandProzent || data.fillLevelPercent || null,
-                ack: true
-            });
+            this.adapter.log.debug(`[Tankinhaltsanzeige] Updating states for station: ${stationId}`);
 
-            await this.adapter.setStateAsync(`${stationPath}.levelLiters`, {
-                val: data.levelLiters || data.fuellstandLiter || data.fillLevelLiters || data.volume || null,
-                ack: true
-            });
+            const stateUpdates = [
+                { id: 'levelPercent', val: data.levelPercent || data.fuellstandProzent || data.fillLevelPercent || null },
+                { id: 'levelLiters', val: data.levelLiters || data.fuellstandLiter || data.fillLevelLiters || data.volume || null },
+                { id: 'volumeMax', val: data.volumeMax || data.maxVolume || data.maxVolumen || null },
+                { id: 'temperature', val: data.temperature || data.temp || null },
+                { id: 'battery', val: data.battery || data.batteryLevel || null },
+                { id: 'signalStrength', val: data.signalStrength || data.signal || data.rssi || null },
+                { id: 'lastUpdate', val: new Date().toISOString() },
+                { id: 'stationName', val: data.name || stationId }
+            ];
 
-            await this.adapter.setStateAsync(`${stationPath}.volumeMax`, {
-                val: data.volumeMax || data.maxVolume || data.maxVolumen || null,
-                ack: true
-            });
-
-            await this.adapter.setStateAsync(`${stationPath}.temperature`, {
-                val: data.temperature || data.temp || null,
-                ack: true
-            });
-
-            await this.adapter.setStateAsync(`${stationPath}.battery`, {
-                val: data.battery || data.batteryLevel || null,
-                ack: true
-            });
-
-            await this.adapter.setStateAsync(`${stationPath}.signalStrength`, {
-                val: data.signalStrength || data.signal || data.rssi || null,
-                ack: true
-            });
-
-            await this.adapter.setStateAsync(`${stationPath}.lastUpdate`, {
-                val: new Date().toISOString(),
-                ack: true
-            });
-
-            await this.adapter.setStateAsync(`${stationPath}.stationName`, {
-                val: data.name || stationId,
-                ack: true
-            });
+            for (const update of stateUpdates) {
+                await this.adapter.setStateAsync(`${stationPath}.${update.id}`, {
+                    val: update.val,
+                    ack: true
+                });
+            }
 
             this.adapter.log.debug(`[Tankinhaltsanzeige] Updated states for station ${stationId}`);
         } catch (error) {
@@ -627,10 +605,10 @@ class TankinhaltsanzeigeAPI {
 class LiquidCheckAPI {
     constructor(adapter) {
         this.adapter = adapter;
-        this.baseUrl = this.adapter.config.liquidCheck.url || 'https://liquidcheck.si-elektronik.de';
-        this.username = this.adapter.config.liquidCheck.username;
-        this.password = this.adapter.config.liquidCheck.password;
-        this.interval = (this.adapter.config.liquidCheck.interval || 5) * 60 * 1000;
+        this.baseUrl = this.adapter.config['liquidCheck.url'] || 'https://liquidcheck.si-elektronik.de';
+        this.username = this.adapter.config['liquidCheck.username'];
+        this.password = this.adapter.config['liquidCheck.password'];
+        this.interval = (this.adapter.config['liquidCheck.interval'] || 5) * 60 * 1000;
         this.cookieJar = new CookieJar();
         this.apiKey = null;
         this.dashboards = [];
@@ -643,10 +621,14 @@ class LiquidCheckAPI {
      */
     async init() {
         this.adapter.log.info('[LiquidCheck] Initializing with interval: ' + (this.interval / 60000) + ' minutes');
-        await this.login();
-        if (this.isLoggedIn) {
-            await this.discoverDashboards();
-            this.startPolling();
+        try {
+            await this.login();
+            if (this.isLoggedIn) {
+                await this.discoverDashboards();
+                this.startPolling();
+            }
+        } catch (e) {
+            this.adapter.log.error('[LiquidCheck] Initialisierung fehlgeschlagen: ' + e.message);
         }
     }
 
@@ -729,6 +711,7 @@ class LiquidCheckAPI {
         this.adapter.log.debug(`[LiquidCheck] Creating states for dashboard: ${dashboardId}`);
 
         // Dashboard-Ordner erstellen
+        this.adapter.log.debug('[LiquidCheck] Creating dashboard channel object: ' + dashboardPath);
         await this.adapter.extendObjectAsync(dashboardPath, {
             type: 'channel',
             common: {
@@ -736,6 +719,7 @@ class LiquidCheckAPI {
             },
             native: {}
         });
+        this.adapter.log.debug('[LiquidCheck] Created dashboard channel object: ' + dashboardPath);
 
         // Standard-States erstellen
         const states = [
@@ -748,6 +732,7 @@ class LiquidCheckAPI {
         ];
 
         for (const state of states) {
+            this.adapter.log.debug(`[LiquidCheck] Creating state: ${dashboardPath}.${state.id}`);
             await this.adapter.extendObjectAsync(`${dashboardPath}.${state.id}`, {
                 type: 'state',
                 common: {
@@ -760,6 +745,7 @@ class LiquidCheckAPI {
                 },
                 native: {}
             });
+            this.adapter.log.debug(`[LiquidCheck] Created state: ${dashboardPath}.${state.id}`);
         }
     }
 
@@ -867,6 +853,8 @@ class LiquidCheckAPI {
         const safePanelName = panelName.replace(/[^a-zA-Z0-9_]/g, '_');
 
         try {
+            this.adapter.log.debug(`[LiquidCheck] Updating value for ${dashboardId}.${safePanelName}`);
+            
             // State erstellen falls nicht vorhanden
             await this.adapter.extendObjectAsync(`${dashboardPath}.${safePanelName}`, {
                 type: 'state',
@@ -973,28 +961,40 @@ class Tankmonitor extends utils.Adapter {
 
         try {
             // Oilview initialisieren
-            if (this.config.oilview && this.config.oilview.enabled) {
-                this.log.info('Initializing Oilview API...');
-                this.oilviewAPI = new OilviewAPI(this);
-                await this.oilviewAPI.init();
+            if (this.config['oilview.enabled']) {
+                try {
+                    this.log.info('Initializing Oilview API...');
+                    this.oilviewAPI = new OilviewAPI(this);
+                    await this.oilviewAPI.init();
+                } catch (e) {
+                    this.log.error('Failed to initialize Oilview: ' + e.message);
+                }
             } else {
                 this.log.debug('Oilview is disabled in configuration');
             }
 
             // Tankinhaltsanzeige initialisieren
-            if (this.config.tankinhaltsanzeige && this.config.tankinhaltsanzeige.enabled) {
-                this.log.info('Initializing Tankinhaltsanzeige API...');
-                this.tankinhaltsanzeigeAPI = new TankinhaltsanzeigeAPI(this);
-                await this.tankinhaltsanzeigeAPI.init();
+            if (this.config['tankinhaltsanzeige.enabled']) {
+                try {
+                    this.log.info('Initializing Tankinhaltsanzeige API...');
+                    this.tankinhaltsanzeigeAPI = new TankinhaltsanzeigeAPI(this);
+                    await this.tankinhaltsanzeigeAPI.init();
+                } catch (e) {
+                    this.log.error('Failed to initialize Tankinhaltsanzeige: ' + e.message);
+                }
             } else {
                 this.log.debug('Tankinhaltsanzeige is disabled in configuration');
             }
 
             // LiquidCheck initialisieren
-            if (this.config.liquidCheck && this.config.liquidCheck.enabled) {
-                this.log.info('Initializing LiquidCheck API...');
-                this.liquidCheckAPI = new LiquidCheckAPI(this);
-                await this.liquidCheckAPI.init();
+            if (this.config['liquidCheck.enabled']) {
+                try {
+                    this.log.info('Initializing LiquidCheck API...');
+                    this.liquidCheckAPI = new LiquidCheckAPI(this);
+                    await this.liquidCheckAPI.init();
+                } catch (e) {
+                    this.log.error('Failed to initialize LiquidCheck: ' + e.message);
+                }
             } else {
                 this.log.debug('LiquidCheck is disabled in configuration');
             }
