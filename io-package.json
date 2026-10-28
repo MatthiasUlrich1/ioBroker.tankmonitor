@@ -9,42 +9,68 @@
       }
     },
     "title": "Tankmonitor",
+    "titleLang": {
+      "de": "Tankmonitor"
+    },
     "desc": {
-      "en": "Adapter for LiquidCheck, Tankinhaltsanzeige, and Oilview",
-      "de": "Adapter für LiquidCheck, Tankinhaltsanzeige und Oilview"
+      "en": "Adapter to read tank levels from LiquidCheck (Grafana), Tankinhaltsanzeige and Oilview",
+      "de": "Adapter zum Auslesen von Tankinhalt aus LiquidCheck (Grafana), Tankinhaltsanzeige und Oilview"
     },
     "authors": [
-      "Matthias <matthias@example.com>"
+      "Matthias Ulrich <matthias@ulrich.dev>"
     ],
     "keywords": [
+      "ioBroker",
       "tank",
-      "monitoring"
+      "tanklevel",
+      "monitoring",
+      "oilview",
+      "liquidcheck",
+      "fuel"
     ],
     "license": "MIT",
     "platform": "Javascript/Node.js",
     "main": "main.js",
     "icon": "tankmonitor.png",
-    "type": "weather",
+    "schema": "admin/schema.json",
+    "type": "monitoring",
+    "types": [
+      "js-controller"
+    ],
     "adminUI": {
-      "port": 3000,
       "config": "json"
-    }
+    },
+    "materialize": true,
+    "files": [
+      "admin/index.html",
+      "admin/jsonConfig.json"
+    ]
   },
   "native": {
     "liquidCheck": {
       "enabled": false,
+      "url": "https://liquidcheck.si-elektronik.de",
       "username": "",
-      "password": ""
+      "password": "",
+      "interval": 5
     },
     "tankinhaltsanzeige": {
       "enabled": false,
+      "url": "https://www.tankinhaltsanzeige.de",
       "username": "",
-      "password": ""
+      "password": "",
+      "interval": 30
     },
     "oilview": {
       "enabled": false,
+      "url": "https://www.oilview.de",
       "username": "",
-      "password": ""
+      "password": "",
+      "interval": 15
     }
-  }
+  },
+  "instanceObjects": [],
+  "instanceStates": [],
+  "objects": [],
+  "states": []
 }
