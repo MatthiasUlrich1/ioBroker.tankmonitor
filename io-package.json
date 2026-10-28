@@ -1,30 +1,14 @@
 {
   "common": {
     "name": "tankmonitor",
-    "version": "0.0.4",
+    "version": "0.0.6",
     "news": {
-      "0.0.4": {
-        "en": "Fix state creation: use flat config keys (jsonConfig dot-notation), prevent adapter stop on single platform init failure, add debug logging around object/state creation",
-        "de": "State-Erstellung behoben: flache Config-Keys (Punkt-Notation von jsonConfig) nutzen, Adapter-Stop bei Init-Fehler einzelner Plattformen verhindern, Debug-Logging rund um Objekt/State-Erstellung"
-      },
-      "0.0.3": {
-        "en": "Fixed Admin UI (jsonConfig.json reference) and version bump",
-        "de": "Admin UI fix (jsonConfig.json Referenz) und Versionsstand"
-      },
-      "0.0.2": {
-        "en": "Fixed Admin UI (jsonConfig.json), improved API login logic",
-        "de": "Admin UI korrigiert (jsonConfig.json), API-Login-Logik verbessert"
-      },
-      "0.0.1": {
-        "en": "initial release",
-        "de": "Erstveröffentlichung"
+      "0.0.6": {
+        "en": "Fix config key mapping (flat structure)",
+        "de": "Konfigurations-Key Mapping repariert (flache Struktur)"
       }
     },
     "title": "Tankmonitor",
-    "titleLang": {
-      "en": "Tankmonitor",
-      "de": "Tankmonitor"
-    },
     "desc": {
       "en": "Adapter to read tank levels from LiquidCheck (Grafana), Tankinhaltsanzeige and Oilview",
       "de": "Adapter zum Auslesen von Tankinhalt aus LiquidCheck (Grafana), Tankinhaltsanzeige und Oilview"
@@ -69,27 +53,21 @@
     "oilview.password"
   ],
   "native": {
-    "liquidCheck": {
-      "enabled": false,
-      "url": "https://liquidcheck.si-elektronik.de",
-      "username": "",
-      "password": "",
-      "interval": 5
-    },
-    "tankinhaltsanzeige": {
-      "enabled": false,
-      "url": "https://www.tankinhaltsanzeige.de",
-      "username": "",
-      "password": "",
-      "interval": 30
-    },
-    "oilview": {
-      "enabled": false,
-      "url": "https://www.oilview.de",
-      "username": "",
-      "password": "",
-      "interval": 15
-    }
+    "oilview.enabled": false,
+    "oilview.url": "https://www.oilview.de",
+    "oilview.username": "",
+    "oilview.password": "",
+    "oilview.interval": 15,
+    "tankinhaltsanzeige.enabled": false,
+    "tankinhaltsanzeige.url": "https://www.tankinhaltsanzeige.de",
+    "tankinhaltsanzeige.username": "",
+    "tankinhaltsanzeige.password": "",
+    "tankinhaltsanzeige.interval": 30,
+    "liquidCheck.enabled": false,
+    "liquidCheck.url": "https://liquidcheck.si-elektronik.de",
+    "liquidCheck.username": "",
+    "liquidCheck.password": "",
+    "liquidCheck.interval": 5
   },
   "instanceObjects": [],
   "instanceStates": [],

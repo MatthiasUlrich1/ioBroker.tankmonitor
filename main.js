@@ -12,10 +12,10 @@ const axios = wrapper(require('axios'));
 class OilviewAPI {
     constructor(adapter) {
         this.adapter = adapter;
-        this.baseUrl = this.adapter.config['oilview.url'] || 'https://www.oilview.de';
-        this.username = this.adapter.config['oilview.username'];
-        this.password = this.adapter.config['oilview.password'];
-        this.interval = (this.adapter.config['oilview.interval'] || 15) * 60 * 1000; // Minuten zu ms
+        this.baseUrl = this.adapter.config['oilview.url'] || this.adapter.config.oilview_url || 'https://www.oilview.de';
+        this.username = this.adapter.config['oilview.username'] || this.adapter.config.oilview_username;
+        this.password = this.adapter.config['oilview.password'] || this.adapter.config.oilview_password;
+        this.interval = ((this.adapter.config['oilview.interval'] || this.adapter.config.oilview_interval) || 15) * 60 * 1000; // Minuten zu ms
         this.cookieJar = new CookieJar();
         this.sessionToken = null;
         this.devices = [];
@@ -308,10 +308,10 @@ class OilviewAPI {
 class TankinhaltsanzeigeAPI {
     constructor(adapter) {
         this.adapter = adapter;
-        this.baseUrl = this.adapter.config['tankinhaltsanzeige.url'] || 'https://www.tankinhaltsanzeige.de';
-        this.username = this.adapter.config['tankinhaltsanzeige.username'];
-        this.password = this.adapter.config['tankinhaltsanzeige.password'];
-        this.interval = (this.adapter.config['tankinhaltsanzeige.interval'] || 30) * 60 * 1000;
+        this.baseUrl = this.adapter.config['tankinhaltsanzeige.url'] || this.adapter.config.tankinhaltsanzeige_url || 'https://www.tankinhaltsanzeige.de';
+        this.username = this.adapter.config['tankinhaltsanzeige.username'] || this.adapter.config.tankinhaltsanzeige_username;
+        this.password = this.adapter.config['tankinhaltsanzeige.password'] || this.adapter.config.tankinhaltsanzeige_password;
+        this.interval = ((this.adapter.config['tankinhaltsanzeige.interval'] || this.adapter.config.tankinhaltsanzeige_interval) || 30) * 60 * 1000;
         this.cookieJar = new CookieJar();
         this.sessionToken = null;
         this.stations = [];
@@ -605,10 +605,10 @@ class TankinhaltsanzeigeAPI {
 class LiquidCheckAPI {
     constructor(adapter) {
         this.adapter = adapter;
-        this.baseUrl = this.adapter.config['liquidCheck.url'] || 'https://liquidcheck.si-elektronik.de';
-        this.username = this.adapter.config['liquidCheck.username'];
-        this.password = this.adapter.config['liquidCheck.password'];
-        this.interval = (this.adapter.config['liquidCheck.interval'] || 5) * 60 * 1000;
+        this.baseUrl = this.adapter.config['liquidCheck.url'] || this.adapter.config.liquidCheck_url || 'https://liquidcheck.si-elektronik.de';
+        this.username = this.adapter.config['liquidCheck.username'] || this.adapter.config.liquidCheck_username;
+        this.password = this.adapter.config['liquidCheck.password'] || this.adapter.config.liquidCheck_password;
+        this.interval = ((this.adapter.config['liquidCheck.interval'] || this.adapter.config.liquidCheck_interval) || 5) * 60 * 1000;
         this.cookieJar = new CookieJar();
         this.apiKey = null;
         this.dashboards = [];
