@@ -37,13 +37,9 @@
     "types": [
       "js-controller"
     ],
-    "adminUI": {
-      "config": "json"
-    },
     "materialize": true,
     "files": [
-      "admin/index.html",
-      "admin/jsonConfig.json"
+      "admin/schema.json"
     ]
   },
   "native": {
