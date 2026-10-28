@@ -1,0 +1,50 @@
+{
+  "common": {
+    "name": "tankmonitor",
+    "version": "0.0.1",
+    "news": {
+      "0.0.1": {
+        "en": "initial release",
+        "de": "Erstveröffentlichung"
+      }
+    },
+    "title": "Tankmonitor",
+    "desc": {
+      "en": "Adapter for LiquidCheck, Tankinhaltsanzeige, and Oilview",
+      "de": "Adapter für LiquidCheck, Tankinhaltsanzeige und Oilview"
+    },
+    "authors": [
+      "Matthias <matthias@example.com>"
+    ],
+    "keywords": [
+      "tank",
+      "monitoring"
+    ],
+    "license": "MIT",
+    "platform": "Javascript/Node.js",
+    "main": "main.js",
+    "icon": "tankmonitor.png",
+    "type": "weather",
+    "adminUI": {
+      "port": 3000,
+      "config": "json"
+    }
+  },
+  "native": {
+    "liquidCheck": {
+      "enabled": false,
+      "username": "",
+      "password": ""
+    },
+    "tankinhaltsanzeige": {
+      "enabled": false,
+      "username": "",
+      "password": ""
+    },
+    "oilview": {
+      "enabled": false,
+      "username": "",
+      "password": ""
+    }
+  }
+}
