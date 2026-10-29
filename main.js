@@ -965,15 +965,16 @@ class LiquidCheckAPI {
      * Holt Daten für ein einzelnes Panel
      * 
      * Grafana 6.x (LiquidCheck): Nutzt den Prometheus-Proxy-Endpoint direkt
-     *   GET /api/datasources/proxy/{promId}/api/v1/query?query=<expr>
+     *   GET /api/datasources/proxy/{promId}/api/v1/query_range?query=<expr>&start=<ts>&end=<ts>&step=60
      * 
-     * Grund: POST /api/ds/query funktioniert auf Grafana 6.7.3 mit
-     * datasource: null im Panel-JSON nicht ("datasource missing name").
-     * Der Proxy-Endpoint ist der native Weg, den auch das Grafana-Frontend
-     * nutzt, und benötigt nur die numerische Datasource-ID.
+     * Warum query_range statt query: Instant-Query (query) liefert oft leere Vektoren,
+     * wenn der letzte Sample >15s zurückliegt. query_range mit Zeitfenster "now-1h..now"
+     * ist robuster und liefert auch historische Werte.
      */
     async fetchPanelData(dashboardId, panel) {
         const promId = this.prometheusId || 115;
+        const now = Math.floor(Date.now() / 1000);
+        const start = now - 3600; // 1h Fenster
 
         try {
             for (const target of (panel.targets || [])) {
@@ -984,8 +985,13 @@ class LiquidCheckAPI {
                 const refId = target.refId || 'A';
                 this.adapter.log.debug(`[LiquidCheck] Prometheus-Query für Panel "${panel.title || panel.id}": ${target.expr}`);
 
-                const response = await axios.get(`${this.baseUrl}/api/datasources/proxy/${promId}/api/v1/query`, {
-                    params: { query: target.expr },
+                const response = await axios.get(`${this.baseUrl}/api/datasources/proxy/${promId}/api/v1/query_range`, {
+                    params: {
+                        query: target.expr,
+                        start: start,
+                        end: now,
+                        step: 60
+                    },
                     jar: this.cookieJar,
                     withCredentials: true,
                     headers: {
@@ -1002,7 +1008,6 @@ class LiquidCheckAPI {
                     this.isLoggedIn = false;
                     await this.login();
                     if (this.isLoggedIn) {
-                        // Neu einsteigen: Prom-ID erneut holen (Session ist neu)
                         await this.discoverDatasources();
                         return await this.fetchPanelData(dashboardId, panel);
                     }
@@ -1014,15 +1019,19 @@ class LiquidCheckAPI {
                     continue;
                 }
 
-                // Prometheus-Antwort: { status: 'success', data: { resultType, result: [ { metric, value: [ts, "val"] } ] } }
+                // Prometheus-Antwort: { status: 'success', data: { resultType: 'matrix', result: [ { metric, values: [[ts,"val"], ...] } ] } }
                 if (response.data && response.data.status === 'success' && response.data.data && Array.isArray(response.data.data.result)) {
                     const results = response.data.data.result;
                     if (results.length > 0) {
-                        const valuePair = results[0].value;
-                        if (Array.isArray(valuePair) && valuePair.length >= 2) {
-                            const val = parseFloat(valuePair[1]);
-                            if (!isNaN(val)) {
-                                await this.updateDashboardValue(dashboardId, panel.title || refId, val);
+                        const values = results[0].values;
+                        if (Array.isArray(values) && values.length > 0) {
+                            // Letztes Wertepaar [timestamp, "value"]
+                            const valuePair = values[values.length - 1];
+                            if (Array.isArray(valuePair) && valuePair.length >= 2) {
+                                const val = parseFloat(valuePair[1]);
+                                if (!isNaN(val)) {
+                                    await this.updateDashboardValue(dashboardId, panel.title || refId, val);
+                                }
                             }
                         }
                     }
@@ -1107,6 +1116,15 @@ class LiquidCheckAPI {
 
         this.pollInterval = setInterval(async () => {
             try {
+                // Grafana-Session läuft schnell ab -> vor jedem Zyklus frisch einloggen
+                // (kostet nur 1 Request, verhindert 401er während des Pollings)
+                this.isLoggedIn = false;
+                await this.login();
+                if (!this.isLoggedIn) {
+                    this.adapter.log.warn('[LiquidCheck] Login vor Polling fehlgeschlagen, überspringe Zyklus');
+                    return;
+                }
+                await this.discoverDatasources();
                 await this.fetchDashboardData();
             } catch (error) {
                 this.adapter.log.error(`[LiquidCheck] Polling error: ${error.message}`);

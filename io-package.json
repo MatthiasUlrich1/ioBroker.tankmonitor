@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "tankmonitor",
-    "version": "0.1.8",
+    "version": "0.1.9",
     "news": {
+      "0.1.9": {
+        "en": "LiquidCheck: Robustness fix – Fresh login before every polling cycle (prevents 401 errors). Switched from instant queries to time-series range queries (prevents empty values).",
+        "de": "LiquidCheck: Robustheits-Fix – Frischer Login vor jedem Polling-Zyklus (verhindert 401-Fehler). Wechsel von Instant-Queries zu Zeitreihen-Range-Queries (verhindert leere Werte)."
+      },
       "0.1.8": {
         "en": "LiquidCheck: Switched to native Prometheus proxy API (/api/datasources/proxy/{id}/api/v1/query) - eliminates 500 'datasource missing name' error completely",
         "de": "LiquidCheck: Wechsel auf nativen Prometheus-Proxy-Endpunkt (/api/datasources/proxy/{id}/api/v1/query) - behebt den 500 'datasource missing name' Fehler endgültig"
