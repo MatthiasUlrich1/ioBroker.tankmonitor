@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "tankmonitor",
-    "version": "0.1.1",
+    "version": "0.1.2",
     "news": {
+      "0.1.2": {
+        "en": "Fix Oilview sensor data fetch: use /api/v2/devices/{id}/process endpoint with correct response format parsing",
+        "de": "Oilview Sensor-Daten repariert: /api/v2/devices/{id}/process Endpoint mit korrekter Antwortformat-Parsing"
+      },
       "0.1.1": {
         "en": "Fix LiquidCheck Panel queries (Grafana 6.x API format, nested Row panels, better error logging)",
         "de": "LiquidCheck Panel-Queries repariert (Grafana 6.x API-Format, verschachtelte Row-Panels, bessere Fehler-Logs)"

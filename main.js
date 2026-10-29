@@ -224,30 +224,42 @@ class OilviewAPI {
 
     /**
      * Holt Sensordaten für alle Devices
+     * Oilview nutzt: GET /api/v2/devices/{deviceId}/process?limit=25000
+     * Antwortformat: [{ sensorId, data: [[id, timestamp, ?, wert, temperatur], ...] }, ...]
+     * Die Device-Objekte enthalten ein sensors-Array mit {id, name, unit, sequence}.
      */
     async fetchSensorData() {
         try {
             this.adapter.log.debug('[Oilview] Fetching sensor data...');
 
-            const response = await axios.get(`${this.baseUrl}/api/v2/sensor-data`, {
-                jar: this.cookieJar,
-                withCredentials: true,
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                }
-            });
+            for (const device of this.devices) {
+                const deviceId = device.id || device.deviceId;
+                if (!deviceId) continue;
 
-            if (response.data) {
-                // Daten für jedes Device aktualisieren
-                for (const device of this.devices) {
-                    const deviceId = device.id || device.deviceId || `device_${device.name || 'unknown'}`;
-                    const deviceData = Array.isArray(response.data)
-                        ? response.data.find(d => d.deviceId === deviceId || d.id === deviceId)
-                        : response.data;
+                try {
+                    const response = await axios.get(`${this.baseUrl}/api/v2/devices/${deviceId}/process?limit=25000`, {
+                        jar: this.cookieJar,
+                        withCredentials: true,
+                        headers: {
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                            'Accept': 'application/json'
+                        },
+                        timeout: 15000,
+                        validateStatus: status => status < 500
+                    });
 
-                    if (deviceData) {
-                        await this.updateDeviceStates(deviceId, deviceData);
+                    if (response.status >= 400) {
+                        this.adapter.log.warn(`[Oilview] Sensor data HTTP ${response.status} for device ${deviceId}`);
+                        continue;
                     }
+
+                    if (response.data && Array.isArray(response.data)) {
+                        await this.updateDeviceStates(deviceId, response.data, device);
+                    } else {
+                        this.adapter.log.warn(`[Oilview] Unexpected sensor data format for device ${deviceId}`);
+                    }
+                } catch (e) {
+                    this.adapter.log.error(`[Oilview] Sensor data fetch failed for device ${deviceId}: ${e.message}`);
                 }
             }
         } catch (error) {
@@ -268,24 +280,91 @@ class OilviewAPI {
 
     /**
      * Aktualisiert die States für ein Device
+     * @param {string} deviceId - Die Device-ID
+     * @param {Array} sensorData - [{ sensorId, data: [[id, timestamp, ?, wert, temperatur], ...] }, ...]
+     * @param {Object} device - Das Device-Objekt mit sensors-Array
      */
-    async updateDeviceStates(deviceId, data) {
+    async updateDeviceStates(deviceId, sensorData, device) {
         const devicePath = `oilview.${deviceId}`;
 
         try {
             this.adapter.log.debug(`[Oilview] Updating states for device: ${deviceId}`);
-            
+
+            // Letzten Eintrag pro Sensor finden
+            const latestPerSensor = {};
+            for (const sensor of sensorData) {
+                if (!sensor.data || sensor.data.length === 0) continue;
+                const latest = sensor.data[sensor.data.length - 1];
+                // Format: [sensorId, timestamp, ?, wert, temperatur?]
+                latestPerSensor[sensor.sensorId] = {
+                    value: latest[3],
+                    temperature: latest[4],
+                    timestamp: latest[1]
+                };
+            }
+
+            // Sensor-Map aus dem Device-Objekt erstellen
+            const sensorMap = {};
+            if (device && device.sensors) {
+                for (const s of device.sensors) {
+                    sensorMap[s.id] = s;
+                }
+            }
+
+            // Füllstand und Temperatur aus den Sensoren ableiten
+            let levelValue = null;
+            let temperatureValue = null;
+            let batteryValue = null;
+            let signalValue = null;
+
+            for (const [sensorId, sensorInfo] of Object.entries(latestPerSensor)) {
+                const sensorDef = sensorMap[sensorId];
+                const sensorName = sensorDef ? sensorDef.name : `Sensor ${sensorId}`;
+                const sensorUnit = sensorDef ? sensorDef.unit : '';
+
+                // Dynamische States pro Sensor erstellen
+                const safeName = sensorName.replace(/[^a-zA-Z0-9_]/g, '_');
+                const stateKey = `sensor_${sensorId}_${safeName}`;
+                await this.adapter.extendObjectAsync(`${devicePath}.${stateKey}`, {
+                    type: 'state',
+                    common: {
+                        name: sensorName,
+                        type: 'number',
+                        role: 'value',
+                        unit: sensorUnit,
+                        read: true,
+                        write: false
+                    },
+                    native: {}
+                });
+
+                await this.adapter.setStateAsync(`${devicePath}.${stateKey}`, {
+                    val: sensorInfo.value,
+                    ack: true
+                });
+
+                // Füllstand heuristisch zuordnen
+                if (sensorUnit === '%' || sensorUnit === 'l' || sensorUnit === 'Liter' || sensorName.toLowerCase().includes('füllstand') || sensorName.toLowerCase().includes('level') || sensorName.toLowerCase().includes('fill')) {
+                    levelValue = sensorInfo.value;
+                }
+                if (sensorUnit === '°C' || sensorName.toLowerCase().includes('temperatur') || sensorName.toLowerCase().includes('temperature')) {
+                    temperatureValue = sensorInfo.value;
+                }
+            }
+
+            // Standard-States aktualisieren
             const stateUpdates = [
-                { id: 'levelPercent', val: data.levelPercent || data.level_percent || null },
-                { id: 'levelLiters', val: data.levelLiters || data.level_liters || data.volume || null },
-                { id: 'temperature', val: data.temperature || data.temp || null },
-                { id: 'battery', val: data.battery || data.batteryLevel || null },
-                { id: 'signalStrength', val: data.signalStrength || data.signal_strength || data.rssi || null },
+                { id: 'levelPercent', val: levelValue },
+                { id: 'levelLiters', val: levelValue },
+                { id: 'temperature', val: temperatureValue },
+                { id: 'battery', val: batteryValue },
+                { id: 'signalStrength', val: signalValue },
                 { id: 'lastUpdate', val: new Date().toISOString() },
-                { id: 'deviceName', val: data.name || deviceId }
+                { id: 'deviceName', val: device ? (device.name || deviceId) : deviceId }
             ];
 
             for (const update of stateUpdates) {
+                if (update.val === null) continue;
                 await this.adapter.setStateAsync(`${devicePath}.${update.id}`, {
                     val: update.val,
                     ack: true

@@ -1,6 +1,6 @@
 {
   "name": "iobroker.tankmonitor",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "ioBroker adapter for multi-site tank monitoring (LiquidCheck, Tankinhaltsanzeige, Oilview)",
   "author": {
     "name": "Matthias",
