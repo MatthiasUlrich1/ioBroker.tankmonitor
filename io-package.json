@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "tankmonitor",
-    "version": "0.0.8",
+    "version": "0.0.9",
     "news": {
+      "0.0.9": {
+        "en": "Fix Admin UI config saving: use nested native structure so settings persist after save/restart",
+        "de": "Admin-UI Konfigurations-Speichern behoben: verschachtelte native-Struktur, damit Einstellungen nach Speichern/Neustart erhalten bleiben"
+      },
       "0.0.8": {
         "en": "Fix all three login flows (Oilview CSRF header, Tankinhaltsanzeige form login, LiquidCheck /login endpoint)",
         "de": "Alle drei Login-Flows repariert (Oilview CSRF-Header, Tankinhaltsanzeige Formular-Login, LiquidCheck /login-Endpunkt)"
@@ -56,26 +60,32 @@
     ]
   },
   "encryptedNative": [
-    "liquidCheck.password",
+    "oilview.password",
     "tankinhaltsanzeige.password",
-    "oilview.password"
+    "liquidCheck.password"
   ],
   "native": {
-    "oilview.enabled": false,
-    "oilview.url": "https://www.oilview.de",
-    "oilview.username": "",
-    "oilview.password": "",
-    "oilview.interval": 15,
-    "tankinhaltsanzeige.enabled": false,
-    "tankinhaltsanzeige.url": "https://www.tankinhaltsanzeige.de",
-    "tankinhaltsanzeige.username": "",
-    "tankinhaltsanzeige.password": "",
-    "tankinhaltsanzeige.interval": 30,
-    "liquidCheck.enabled": false,
-    "liquidCheck.url": "https://liquidcheck.si-elektronik.de",
-    "liquidCheck.username": "",
-    "liquidCheck.password": "",
-    "liquidCheck.interval": 5
+    "oilview": {
+      "enabled": false,
+      "url": "https://www.oilview.de",
+      "username": "",
+      "password": "",
+      "interval": 15
+    },
+    "tankinhaltsanzeige": {
+      "enabled": false,
+      "url": "https://www.tankinhaltsanzeige.de",
+      "username": "",
+      "password": "",
+      "interval": 30
+    },
+    "liquidCheck": {
+      "enabled": false,
+      "url": "https://liquidcheck.si-elektronik.de",
+      "username": "",
+      "password": "",
+      "interval": 5
+    }
   },
   "instanceObjects": [],
   "instanceStates": [],
