@@ -931,41 +931,50 @@ class LiquidCheckAPI {
     /**
      * Holt Daten für ein einzelnes Panel
      * Grafana 6.x API: POST /api/ds/query
-     * - from/to als Strings ("now-1h" / "now")
-     * - datasource muss als { type, uid } oder { type, id } im Target sein
      * 
-     * Problem: Dashboard-JSON speichert datasource oft nur als String-Name oder null.
-     * Lösung: Datasource aus dem Dashboard-Kontext ergänzen.
+     * Grafana 6.7.3 verlangt bei /api/ds/query zwingend ein vollständiges
+     * Datasource-Objekt mit { type, uid, name } pro Target.
+     * Fehlt eines dieser Felder, antwortet der Server mit HTTP 500 "datasource missing name".
      */
     async fetchPanelData(dashboardId, panel) {
         try {
-            // Datasource aus dem Panel oder dem ersten Target extrahieren
-            let datasource = panel.datasource || null;
-            if (!datasource && panel.targets && panel.targets.length > 0) {
-                datasource = panel.targets[0].datasource;
+            // Standard-Datasource für LiquidCheck (Prometheus)
+            const defaultDatasource = { type: 'prometheus', uid: 'prometheus', name: 'Prometheus' };
+
+            // Datasource aus Panel oder Target ermitteln, sonst Fallback
+            let ds = panel.datasource;
+            if (!ds && panel.targets && panel.targets.length > 0) {
+                ds = panel.targets[0].datasource;
             }
 
-            // Falls datasource nur ein String ist (Grafana 6.x Legacy), in Objekt umwandeln
-            if (typeof datasource === 'string') {
-                datasource = { type: null, uid: datasource };
+            let dsObj = defaultDatasource;
+            if (typeof ds === 'string' && ds) {
+                dsObj = { type: 'prometheus', uid: ds, name: ds };
+            } else if (typeof ds === 'object' && ds !== null) {
+                dsObj = {
+                    type: ds.type || 'prometheus',
+                    uid: ds.uid || ds.name || 'prometheus',
+                    name: ds.name || ds.uid || 'Prometheus'
+                };
             }
 
-            // Targets aufbereiten: datasource sicherstellen
-            const queries = (panel.targets || []).map(target => {
-                const q = { ...target, refId: target.refId || 'A' };
-                // datasource aus Panel übernehmen, falls Target keine hat
-                if (!q.datasource && datasource) {
-                    q.datasource = datasource;
-                }
-                return q;
-            });
+            // Targets aufbereiten mit vollständigem Datasource-Objekt
+            const queries = (panel.targets || []).map(target => ({
+                ...target,
+                refId: target.refId || 'A',
+                datasource: (target.datasource && typeof target.datasource === 'object') ? {
+                    type: target.datasource.type || dsObj.type,
+                    uid: target.datasource.uid || target.datasource.name || dsObj.uid,
+                    name: target.datasource.name || target.datasource.uid || dsObj.name
+                } : dsObj
+            }));
 
             if (queries.length === 0) {
                 this.adapter.log.debug(`[LiquidCheck] Panel "${panel.title || panel.id}": keine Targets`);
                 return;
             }
 
-            this.adapter.log.debug(`[LiquidCheck] Querying panel "${panel.title || panel.id}": ${queries.length} Target(s), Datasource: ${JSON.stringify(datasource)}`);
+            this.adapter.log.debug(`[LiquidCheck] Querying panel "${panel.title || panel.id}": ${queries.length} Target(s), Datasource: ${JSON.stringify(dsObj)}`);
 
             const queryPayload = {
                 queries,
@@ -980,8 +989,6 @@ class LiquidCheckAPI {
                     'Content-Type': 'application/json',
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
                     'Accept': 'application/json',
-                    // WICHTIG: Grafana 6.x lehnt ds/query ohne Origin/Referer ab
-                    // ("datasource missing name" / 500)
                     'Origin': this.baseUrl,
                     'Referer': this.baseUrl + '/d/' + dashboardId,
                     'X-Requested-With': 'XMLHttpRequest'
@@ -990,21 +997,28 @@ class LiquidCheckAPI {
                 validateStatus: status => status < 500
             });
 
+            if (response.status === 401) {
+                this.adapter.log.warn('[LiquidCheck] Session expired during panel query, re-logging in...');
+                this.isLoggedIn = false;
+                await this.login();
+                if (this.isLoggedIn) {
+                    return await this.fetchPanelData(dashboardId, panel);
+                }
+                return;
+            }
+
             if (response.status >= 400) {
-                // 400 = Query-Format/Parameter (z.B. "datasource missing name"), 401 = Session, 403 = Rechte, 500 = Server
                 this.adapter.log.warn(`[LiquidCheck] Panel "${panel.title || panel.id}": HTTP ${response.status} – ${JSON.stringify(response.data).substring(0, 400)}`);
                 return;
             }
 
             if (response.data && response.data.results) {
-                // Daten aus den Query-Ergebnissen extrahieren
                 for (const [refId, result] of Object.entries(response.data.results)) {
                     if (result.error) {
                         this.adapter.log.warn(`[LiquidCheck] Query-Fehler bei "${panel.title || refId}": ${JSON.stringify(result.error)}`);
                         continue;
                     }
                     if (result.frames && result.frames.length > 0) {
-                        // Grafana 7+ DataFrame-Format
                         const frame = result.frames[0];
                         if (frame.fields && frame.fields.length > 0) {
                             const values = frame.fields[0].values || [];
@@ -1014,7 +1028,6 @@ class LiquidCheckAPI {
                             }
                         }
                     } else if (result.series && result.series.length > 0) {
-                        // Grafana 6.x Legacy-Format
                         const series = result.series[0];
                         const values = series.values && series.values.length > 0 ? series.values[1] : [];
                         if (values.length > 0) {
