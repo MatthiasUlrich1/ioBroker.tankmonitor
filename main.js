@@ -1029,7 +1029,12 @@ class LiquidCheckAPI {
                 headers: {
                     'Content-Type': 'application/json',
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                    'Accept': 'application/json'
+                    'Accept': 'application/json',
+                    // WICHTIG: Grafana 6.x lehnt ds/query ohne Origin/Referer ab
+                    // ("datasource missing name" / 500)
+                    'Origin': this.baseUrl,
+                    'Referer': this.baseUrl + '/d/' + dashboardId,
+                    'X-Requested-With': 'XMLHttpRequest'
                 },
                 timeout: 15000,
                 validateStatus: status => status < 500
