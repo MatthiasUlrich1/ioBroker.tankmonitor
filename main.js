@@ -41,52 +41,61 @@ class OilviewAPI {
     }
 
     /**
-     * Login bei Oilview (Laravel Sanctum / Cookie-basiert)
-     * 1. CSRF-Cookie (XSRF-TOKEN) holen
-     * 2. POST /api/v2/login mit X-XSRF-TOKEN Header
+     * Holt den CSRF-Token aus dem x-csrf-token Response-Header.
+     * Oilview liefert den Token in jedem API-Response (auch 401) als Header.
+     */
+    async fetchCsrfToken() {
+        const headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'application/json'
+        };
+        try {
+            let response;
+            try {
+                response = await axios.get(`${this.baseUrl}/api/v2/devices`, {
+                    jar: this.cookieJar,
+                    headers,
+                    timeout: 10000,
+                    validateStatus: () => true
+                });
+            } catch (e) {
+                // Bei 401/anderen Status der Error-Response-Object mit .response
+                if (e && e.response) {
+                    response = e.response;
+                } else {
+                    throw e;
+                }
+            }
+
+            if (response && response.headers) {
+                const token = response.headers['x-csrf-token'] || response.headers['X-Csrf-Token'] || response.headers['X-CSRF-TOKEN'];
+                if (token) {
+                    this.adapter.log.debug('[Oilview] CSRF-Token aus Response-Header erhalten');
+                    return token;
+                }
+            }
+            this.adapter.log.warn('[Oilview] Kein CSRF-Token im Response-Header gefunden');
+        } catch (e) {
+            this.adapter.log.warn('[Oilview] CSRF-Token konnte nicht geholt werden: ' + e.message);
+        }
+        return null;
+    }
+
+    /**
+     * Login bei Oilview (CSRF-basiert)
+     * 1. CSRF-Token aus dem x-csrf-token Response-Header holen
+     * 2. POST /api/v2/login mit X-Csrf-Token Header
      */
     async login() {
         try {
             this.adapter.log.info('[Oilview] Logging in...');
 
-            const headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            };
-
-            // Schritt 1: CSRF-Cookie holen (Laravel Sanctum Standard)
-            let xsrfToken = null;
-            let csrfCookieSuccess = false;
-            
-            try {
-                const csrfResponse = await axios.get(`${this.baseUrl}/api/v2/csrf-token`, {
-                    jar: this.cookieJar,
-                    headers,
-                    timeout: 10000
-                });
-                csrfCookieSuccess = true;
-                this.adapter.log.debug('[Oilview] CSRF-Token-Endpunkt erfolgreich aufgerufen');
-            } catch (e) {
-                this.adapter.log.debug('[Oilview] CSRF-Token-Endpunkt fehlgeschlagen: ' + e.message);
-                // Fallback: Startseite holen
-                try {
-                    await axios.get(this.baseUrl, {
-                        jar: this.cookieJar,
-                        headers,
-                        timeout: 10000
-                    });
-                    this.adapter.log.debug('[Oilview] Startseite erfolgreich geladen');
-                } catch (e2) {
-                    this.adapter.log.warn('[Oilview] CSRF-Cookie konnte nicht geladen werden: ' + e2.message);
-                }
+            if (!this.username || !this.password) {
+                throw new Error('Oilview: Benutzername oder Passwort nicht konfiguriert');
             }
 
-            // XSRF-TOKEN aus dem Cookie-Jar extrahieren und dekodieren
-            const cookiesInJar = await this.cookieJar.getCookies(this.baseUrl);
-            const xsrfCookie = cookiesInJar.find(c => c.key === 'XSRF-TOKEN');
-            if (xsrfCookie) {
-                xsrfToken = decodeURIComponent(xsrfCookie.value);
-                this.adapter.log.debug('[Oilview] XSRF-TOKEN aus Cookie gefunden');
-            }
+            // Schritt 1: CSRF-Token aus Response-Header holen
+            const csrfToken = await this.fetchCsrfToken();
 
             // Schritt 2: Login durchführen (JSON)
             const loginPayload = {
@@ -94,11 +103,14 @@ class OilviewAPI {
                 password: this.password
             };
 
-            const loginHeaders = { ...headers, 'Content-Type': 'application/json', 'Accept': 'application/json' };
-            if (xsrfToken) {
-                loginHeaders['X-XSRF-TOKEN'] = xsrfToken;
-                loginHeaders['X-CSRF-TOKEN'] = xsrfToken;
-                this.adapter.log.debug('[Oilview] XSRF-Token-Header hinzugefügt');
+            const loginHeaders = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            };
+            if (csrfToken) {
+                loginHeaders['X-Csrf-Token'] = csrfToken;
+                this.adapter.log.debug('[Oilview] CSRF-Token-Header hinzugefügt');
             }
 
             this.adapter.log.debug('[Oilview] Login-Daten: Benutzername=' + (this.username ? '✓' : '✗') + ', Passwort=' + (this.password ? '✓' : '✗'));
@@ -352,113 +364,89 @@ class TankinhaltsanzeigeAPI {
     }
 
     /**
-     * Login mit CSRF-Token-Extraktion
+     * Login bei Tankinhaltsanzeige
+     * Das Formular nutzt: _token (Laravel CSRF), name (Nutzername!), password
+     * Der POST ist ein klassisches HTML-Formular (x-www-form-urlencoded), kein JSON.
      */
     async login() {
         try {
             this.adapter.log.info('[Tankinhaltsanzeige] Logging in...');
 
-            const headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Content-Type': 'application/json'
-            };
+            if (!this.username || !this.password) {
+                throw new Error('Tankinhaltsanzeige: Benutzername oder Passwort nicht konfiguriert');
+            }
 
-            // Schritt 1: Login-Seite holen und CSRF-Token extrahieren
-            let csrfToken = null;
-            let loginPageSuccess = false;
-            
+            // Schritt 1: Login-Seite holen und _token extrahieren
             try {
                 const loginPageResponse = await axios.get(`${this.baseUrl}/auth/login`, {
                     jar: this.cookieJar,
-                    withCredentials: true,
-                    headers: headers,
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                        'Accept': 'text/html'
+                    },
                     timeout: 10000
                 });
-                loginPageSuccess = true;
                 this.adapter.log.debug('[Tankinhaltsanzeige] Login-Seite erfolgreich geladen');
 
-                // CSRF-Token aus HTML extrahieren (verschiedene mögliche Formate)
-                csrfToken = this.extractCsrfToken(loginPageResponse.data);
-                
-                if (csrfToken) {
-                    this.adapter.log.debug('[Tankinhaltsanzeige] CSRF-Token extrahiert');
+                // Laravel-Standard: <input type="hidden" name="_token" value="...">
+                const m = loginPageResponse.data.match(/name="_token"\s+value="([^"]+)"/);
+                if (m) {
+                    this.csrfToken = m[1];
+                    this.adapter.log.debug('[Tankinhaltsanzeige] _token extrahiert');
                 } else {
-                    this.adapter.log.warn('[Tankinhaltsanzeige] CSRF-Token nicht in HTML gefunden');
+                    this.adapter.log.warn('[Tankinhaltsanzeige] _token nicht in HTML gefunden, versuche Login ohne Token');
+                    this.csrfToken = null;
                 }
             } catch (e) {
                 this.adapter.log.error('[Tankinhaltsanzeige] Login-Seite konnte nicht geladen werden: ' + e.message);
-                throw new Error('Login-Seite nicht verfügbar');
+                throw new Error('Login-Seite nicht verfügbar: ' + e.message);
             }
 
-            // Schritt 2: Login durchführen
-            const loginData = {
-                email: this.username,
-                password: this.password
-            };
-
-            if (csrfToken) {
-                loginData._csrf = csrfToken;
+            // Schritt 2: Login als HTML-Formular (form-urlencoded) senden
+            const params = new URLSearchParams();
+            if (this.csrfToken) {
+                params.append('_token', this.csrfToken);
             }
+            params.append('name', this.username);
+            params.append('password', this.password);
+            params.append('remember', 'on');
 
-            this.adapter.log.debug('[Tankinhaltsanzeige] Login-Daten: Benutzername=' + (this.username ? '✓' : '✗') + ', Passwort=' + (this.password ? '✓' : '✗'));
+            this.adapter.log.debug('[Tankinhaltsanzeige] Login-Daten: name=' + (this.username ? '✓' : '✗') + ', password=' + (this.password ? '✓' : '✗'));
 
-            this.adapter.log.debug('[Tankinhaltsanzeige] Login-Versuch mit URL: ' + `${this.baseUrl}/auth/login`);
-            this.adapter.log.debug('[Tankinhaltsanzeige] Login-Payload: email=' + (this.username ? '✓' : '✗') + ', password=' + (this.password ? '✓' : '✗'));
-
-            const loginResponse = await axios.post(`${this.baseUrl}/auth/login`, loginData, {
+            const loginResponse = await axios.post(`${this.baseUrl}/auth/login`, params.toString(), {
                 jar: this.cookieJar,
-                withCredentials: true,
-                headers: headers,
-                timeout: 15000
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Accept': 'text/html, application/xhtml+xml'
+                },
+                timeout: 15000,
+                maxRedirects: 5,
+                validateStatus: status => status < 500
             });
 
-            this.adapter.log.debug('[Tankinhaltsanzeige] Login-Response Status: ' + loginResponse.status);
+            // Beim Erfolg leitet die Seite weiter (302 -> final 200 auf andere URL).
+            // Bei falschen Credentials landet man erneut auf /auth/login mit Status 200.
+            const finalUrl = (loginResponse.request && loginResponse.request.res && loginResponse.request.res.responseUrl) || '';
+            this.adapter.log.debug('[Tankinhaltsanzeige] Login-Response: Status ' + loginResponse.status + ', final URL: ' + finalUrl);
 
-            if (loginResponse.status === 200 || loginResponse.status === 302 || loginResponse.status === 201) {
+            const redirected = finalUrl && !finalUrl.includes('/auth/login');
+            const sessionCookieSet = (await this.cookieJar.getCookies(this.baseUrl)).some(c => c.key.toLowerCase().includes('session'));
+
+            if (loginResponse.status === 302 || redirected || sessionCookieSet) {
                 this.isLoggedIn = true;
                 this.adapter.log.info('[Tankinhaltsanzeige] Login erfolgreich');
             } else {
-                throw new Error(`Login fehlgeschlagen mit Status ${loginResponse.status}: ${JSON.stringify(loginResponse.data).substring(0, 200)}`);
+                throw new Error(`Login fehlgeschlagen (Status ${loginResponse.status}) – vermutlich falsche Zugangsdaten`);
             }
         } catch (error) {
             this.adapter.log.error(`[Tankinhaltsanzeige] Login fehlgeschlagen: ${error.message}`);
             if (error.response) {
-                this.adapter.log.error(`[Tankinhaltsanzeige] Response status: ${error.response.status}, body: ${JSON.stringify(error.response.data).substring(0, 500)}`);
+                this.adapter.log.error(`[Tankinhaltsanzeige] Response status: ${error.response.status}`);
             }
             this.isLoggedIn = false;
             throw error;
         }
-    }
-
-    /**
-     * Extrahieren Sie das CSRF-Token aus HTML
-     */
-    extractCsrfToken(html) {
-        // Format 1: <meta name="csrf-token" content="...">
-        const metaMatch = html.match(/<meta\s+name="csrf-token"\s+content="([^"]+)"/i);
-        if (metaMatch) {
-            return metaMatch[1];
-        }
-
-        // Format 2: <input type="hidden" name="_csrf" value="...">
-        const inputMatch = html.match(/name="_csrf"\s+value="([^"]+)"/i);
-        if (inputMatch) {
-            return inputMatch[1];
-        }
-
-        // Format 3: JavaScript-Variable
-        const jsMatch = html.match(/csrfToken\s*[:=]\s*['\"]([^'\"]+)['\"]/i);
-        if (jsMatch) {
-            return jsMatch[1];
-        }
-
-        // Format 4: JSON-LD Script-Tag
-        const jsonLdMatch = html.match(/<script[^>]*>.*?csrfToken\s*[:=]\s*['\"]([^'\"]+)['\"]/, i);
-        if (jsonLdMatch) {
-            return jsonLdMatch[1];
-        }
-
-        return null;
     }
 
     /**
@@ -680,43 +668,54 @@ class LiquidCheckAPI {
     }
 
     /**
-     * Login bei Grafana
+     * Login bei Grafana (LiquidCheck)
+     * Endpoint: POST /login (nicht /api/login!)
+     * Payload: { user, password }
+     * Bei Erfolg: 200/302 mit Session-Cookie
+     * Bei falschen Creds: 401
      */
     async login() {
         try {
             this.adapter.log.info('[LiquidCheck] Logging in...');
 
+            if (!this.username || !this.password) {
+                throw new Error('LiquidCheck: Benutzername oder Passwort nicht konfiguriert');
+            }
+
             const headers = {
                 'Content-Type': 'application/json',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': 'application/json, text/plain, */*'
             };
 
-            const loginResponse = await axios.post(`${this.baseUrl}/api/login`, {
+            // Endpoint: /login (nicht /api/login – der existiert nicht!)
+            const loginResponse = await axios.post(`${this.baseUrl}/login`, {
                 user: this.username,
-                password: this.password,
-                csrfToken: 'null'  // Grafana 6.x+ kann CSRF-Token benötigen
+                password: this.password
             }, {
                 jar: this.cookieJar,
                 withCredentials: true,
                 headers: headers,
-                timeout: 15000
+                timeout: 15000,
+                maxRedirects: 5,
+                validateStatus: status => status < 500
             });
 
-            if (loginResponse.status === 200) {
-                this.isLoggedIn = true;
-                this.adapter.log.info('[LiquidCheck] Login successful');
+            this.adapter.log.debug('[LiquidCheck] Login-Response Status: ' + loginResponse.status);
 
-                // API-Key aus der Session extrahieren (falls verfügbar)
-                if (loginResponse.data && loginResponse.data.apiKey) {
-                    this.apiKey = loginResponse.data.apiKey;
-                }
+            // 200/302 = erfolgreich, 401 = falsche Credentials
+            if (loginResponse.status === 200 || loginResponse.status === 302) {
+                this.isLoggedIn = true;
+                this.adapter.log.info('[LiquidCheck] Login erfolgreich');
+            } else if (loginResponse.status === 401) {
+                throw new Error('Falsche Zugangsdaten (401 Unauthorized)');
             } else {
-                throw new Error(`Login fehlgeschlagen mit Status ${loginResponse.status}: ${JSON.stringify(loginResponse.data).substring(0, 200)}`);
+                throw new Error(`Login fehlgeschlagen mit Status ${loginResponse.status}`);
             }
         } catch (error) {
             this.adapter.log.error(`[LiquidCheck] Login fehlgeschlagen: ${error.message}`);
             if (error.response) {
-                this.adapter.log.error(`[LiquidCheck] Response status: ${error.response.status}, body: ${JSON.stringify(error.response.data).substring(0, 500)}`);
+                this.adapter.log.error(`[LiquidCheck] Response status: ${error.response.status}`);
             }
             this.isLoggedIn = false;
             throw error;
