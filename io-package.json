@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "tankmonitor",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "news": {
+      "0.1.1": {
+        "en": "Fix LiquidCheck Panel queries (Grafana 6.x API format, nested Row panels, better error logging)",
+        "de": "LiquidCheck Panel-Queries repariert (Grafana 6.x API-Format, verschachtelte Row-Panels, bessere Fehler-Logs)"
+      },
       "0.1.0": {
         "en": "Unique flat config keys per platform - each platform can now be enabled independently and settings persist after save/restart",
         "de": "Eindeutige flache Config-Keys pro Plattform - jede Plattform kann jetzt unabhängig aktiviert werden, Einstellungen bleiben nach Speichern/Neustart erhalten"

@@ -805,6 +805,22 @@ class LiquidCheckAPI {
     }
 
     /**
+     * Sammelt alle Panels aus einem Dashboard rekursiv
+     * (Grafana-Rows enthalten verschachtelte panels-Arrays)
+     */
+    collectPanels(panels) {
+        let allPanels = [];
+        for (const panel of panels) {
+            if (panel.type === 'row' && Array.isArray(panel.panels)) {
+                allPanels = allPanels.concat(this.collectPanels(panel.panels));
+            } else {
+                allPanels.push(panel);
+            }
+        }
+        return allPanels;
+    }
+
+    /**
      * Holt Daten aus allen Dashboards
      */
     async fetchDashboardData() {
@@ -824,15 +840,17 @@ class LiquidCheckAPI {
                 });
 
                 if (dashboardResponse.data && dashboardResponse.data.dashboard) {
-                    // Panels aus dem Dashboard extrahieren
-                    const panels = dashboardResponse.data.dashboard.panels || [];
+                    // Panels aus dem Dashboard extrahieren (inkl. verschachtelter Row-Panels)
+                    const dashboard = dashboardResponse.data.dashboard;
+                    const panels = this.collectPanels(dashboard.panels || []);
+
+                    // Nur Panels mit Daten-Queries berücksichtigen
+                    const queryPanels = panels.filter(p => p.targets && p.targets.length > 0);
+                    this.adapter.log.debug(`[LiquidCheck] Dashboard "${dashboard.title || dashboardId}": ${panels.length} Panels, ${queryPanels.length} mit Queries`);
 
                     // Für jedes Panel die Daten holen
-                    for (const panel of panels) {
-                        if (panel.targets && panel.targets.length > 0) {
-                            // Query an die DataSource senden
-                            await this.fetchPanelData(dashboardId, panel);
-                        }
+                    for (const panel of queryPanels) {
+                        await this.fetchPanelData(dashboardId, panel);
                     }
                 }
             }
@@ -854,49 +872,75 @@ class LiquidCheckAPI {
 
     /**
      * Holt Daten für ein einzelnes Panel
+     * Grafana 6.x API: POST /api/ds/query
+     * - from/to als Strings ("now-1h" / "now")
+     * - datasource-Info kommt direkt aus dem Target (datasource: {type, id})
      */
     async fetchPanelData(dashboardId, panel) {
         try {
+            // Ziel-Queries aus dem Dashboard-JSON übernehmen (inkl. datasource-Objekt)
             const queryPayload = {
                 queries: panel.targets.map(target => ({
-                    refId: target.refId || 'A',
-                    datasourceId: target.datasourceId,
-                    panelId: panel.id,
-                    dashboardId: dashboardId,
-                    ...target
+                    ...target,
+                    refId: target.refId || 'A'
                 })),
-                from: Date.now() - 3600000, // Letzte Stunde
-                to: Date.now(),
-                interval: '5m'
+                from: 'now-1h',
+                to: 'now'
             };
+
+            this.adapter.log.debug(`[LiquidCheck] Querying panel "${panel.title || panel.id}": ${queryPayload.queries.length} Target(s), Datasource: ${JSON.stringify((panel.targets[0] || {}).datasource)}`);
 
             const response = await axios.post(`${this.baseUrl}/api/ds/query`, queryPayload, {
                 jar: this.cookieJar,
                 withCredentials: true,
                 headers: {
                     'Content-Type': 'application/json',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                }
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    'Accept': 'application/json'
+                },
+                timeout: 15000,
+                validateStatus: status => status < 500
             });
+
+            if (response.status >= 400) {
+                // 400 = Query-Format/Parameter, 401 = Session abgelaufen, 403 = Rechte
+                this.adapter.log.warn(`[LiquidCheck] Panel "${panel.title || panel.id}": HTTP ${response.status} – ${JSON.stringify(response.data).substring(0, 400)}`);
+                return;
+            }
 
             if (response.data && response.data.results) {
                 // Daten aus den Query-Ergebnissen extrahieren
                 for (const [refId, result] of Object.entries(response.data.results)) {
+                    if (result.error) {
+                        this.adapter.log.warn(`[LiquidCheck] Query-Fehler bei "${panel.title || refId}": ${JSON.stringify(result.error)}`);
+                        continue;
+                    }
                     if (result.frames && result.frames.length > 0) {
+                        // Grafana 7+ DataFrame-Format
                         const frame = result.frames[0];
                         if (frame.fields && frame.fields.length > 0) {
-                            // Werte aus dem DataFrame extrahieren
                             const values = frame.fields[0].values || [];
                             if (values.length > 0) {
                                 const latestValue = values[values.length - 1];
                                 await this.updateDashboardValue(dashboardId, panel.title || refId, latestValue);
                             }
                         }
+                    } else if (result.series && result.series.length > 0) {
+                        // Grafana 6.x Legacy-Format
+                        const series = result.series[0];
+                        const values = series.values && series.values.length > 0 ? series.values[1] : [];
+                        if (values.length > 0) {
+                            const latestValue = values[values.length - 1];
+                            await this.updateDashboardValue(dashboardId, panel.title || refId, latestValue);
+                        }
                     }
                 }
             }
         } catch (error) {
-            this.adapter.log.debug(`[LiquidCheck] Panel data fetch failed for ${panel.title}: ${error.message}`);
+            this.adapter.log.warn(`[LiquidCheck] Panel data fetch failed for ${panel.title || 'unknown'}: ${error.message}`);
+            if (error.response) {
+                this.adapter.log.warn(`[LiquidCheck] Response: ${JSON.stringify(error.response.data).substring(0, 400)}`);
+            }
         }
     }
 
