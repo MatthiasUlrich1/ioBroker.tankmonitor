@@ -943,6 +943,22 @@ class LiquidCheckAPI {
                     for (const panel of queryPanels) {
                         await this.fetchPanelData(dashboardId, panel);
                     }
+
+                    // Immer Meta-States setzen (auch wenn Panels keine Daten hatten)
+                    const dashboardPath = `liquidcheck.${dashboardId}`;
+                    await this.adapter.extendObjectAsync(`${dashboardPath}.lastUpdate`, {
+                        type: 'state',
+                        common: { name: 'Letztes Update', type: 'string', role: 'date', read: true, write: false },
+                        native: {}
+                    });
+                    await this.adapter.setStateAsync(`${dashboardPath}.lastUpdate`, { val: new Date().toISOString(), ack: true });
+
+                    await this.adapter.extendObjectAsync(`${dashboardPath}.dashboardName`, {
+                        type: 'state',
+                        common: { name: 'Dashboard-Name', type: 'string', role: 'text', read: true, write: false },
+                        native: {}
+                    });
+                    await this.adapter.setStateAsync(`${dashboardPath}.dashboardName`, { val: dashboard.title || dashboardId, ack: true });
                 }
             }
         } catch (error) {
