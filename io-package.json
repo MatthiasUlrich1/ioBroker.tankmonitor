@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "tankmonitor",
-    "version": "0.1.3",
+    "version": "0.1.4",
     "news": {
       "0.1.3": {
         "en": "Oilview: Fetch full sensor details (value, pct, net_pct, net_free_space, capacity, net_capacity, fill_limit) per tank from /api/v2/devices. LiquidCheck: Fix datasource resolution for panel queries when target.datasource is undefined.",
