@@ -55,20 +55,28 @@ class OilviewAPI {
 
             // Schritt 1: CSRF-Cookie holen (Laravel Sanctum Standard)
             let xsrfToken = null;
+            let csrfCookieSuccess = false;
+            
             try {
-                await axios.get(`${this.baseUrl}/api/v2/csrf-token`, {
+                const csrfResponse = await axios.get(`${this.baseUrl}/api/v2/csrf-token`, {
                     jar: this.cookieJar,
-                    headers
+                    headers,
+                    timeout: 10000
                 });
+                csrfCookieSuccess = true;
+                this.adapter.log.debug('[Oilview] CSRF-Token-Endpunkt erfolgreich aufgerufen');
             } catch (e) {
+                this.adapter.log.debug('[Oilview] CSRF-Token-Endpunkt fehlgeschlagen: ' + e.message);
                 // Fallback: Startseite holen
                 try {
                     await axios.get(this.baseUrl, {
                         jar: this.cookieJar,
-                        headers
+                        headers,
+                        timeout: 10000
                     });
+                    this.adapter.log.debug('[Oilview] Startseite erfolgreich geladen');
                 } catch (e2) {
-                    this.adapter.log.debug('[Oilview] CSRF-Cookie konnte nicht geladen werden: ' + e2.message);
+                    this.adapter.log.warn('[Oilview] CSRF-Cookie konnte nicht geladen werden: ' + e2.message);
                 }
             }
 
@@ -77,6 +85,7 @@ class OilviewAPI {
             const xsrfCookie = cookiesInJar.find(c => c.key === 'XSRF-TOKEN');
             if (xsrfCookie) {
                 xsrfToken = decodeURIComponent(xsrfCookie.value);
+                this.adapter.log.debug('[Oilview] XSRF-TOKEN aus Cookie gefunden');
             }
 
             // Schritt 2: Login durchführen (JSON)
@@ -89,25 +98,31 @@ class OilviewAPI {
             if (xsrfToken) {
                 loginHeaders['X-XSRF-TOKEN'] = xsrfToken;
                 loginHeaders['X-CSRF-TOKEN'] = xsrfToken;
+                this.adapter.log.debug('[Oilview] XSRF-Token-Header hinzugefügt');
             }
+
+            this.adapter.log.debug('[Oilview] Login-Daten: Benutzername=' + (this.username ? '✓' : '✗') + ', Passwort=' + (this.password ? '✓' : '✗'));
 
             const loginResponse = await axios.post(`${this.baseUrl}/api/v2/login`, loginPayload, {
                 jar: this.cookieJar,
                 headers: loginHeaders,
                 maxRedirects: 5,
-                validateStatus: status => status < 400
+                validateStatus: status => status < 400,
+                timeout: 15000
             });
 
             if (loginResponse.status === 200 || loginResponse.status === 201) {
                 this.isLoggedIn = true;
-                this.adapter.log.info('[Oilview] Login successful');
+                this.adapter.log.info('[Oilview] Login erfolgreich');
             } else {
-                throw new Error(`Login failed with status ${loginResponse.status}`);
+                throw new Error(`Login fehlgeschlagen mit Status ${loginResponse.status}: ${JSON.stringify(loginResponse.data).substring(0, 200)}`);
             }
         } catch (error) {
-            this.adapter.log.error(`[Oilview] Login failed: ${error.message}`);
+            this.adapter.log.error(`[Oilview] Login fehlgeschlagen: ${error.message}`);
             if (error.response) {
                 this.adapter.log.error(`[Oilview] Response status: ${error.response.status}, body: ${JSON.stringify(error.response.data).substring(0, 500)}`);
+            } else if (error.request) {
+                this.adapter.log.error(`[Oilview] Keine Response erhalten: ${error.request.toString().substring(0, 200)}`);
             }
             this.isLoggedIn = false;
             throw error;
@@ -343,44 +358,36 @@ class TankinhaltsanzeigeAPI {
         try {
             this.adapter.log.info('[Tankinhaltsanzeige] Logging in...');
 
+            const headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Content-Type': 'application/json'
+            };
+
             // Schritt 1: Login-Seite holen und CSRF-Token extrahieren
-            const loginPageResponse = await axios.get(`${this.baseUrl}/auth/login`, {
-                jar: this.cookieJar,
-                withCredentials: true,
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                }
-            });
-
-            // CSRF-Token aus HTML extrahieren (verschiedene mögliche Formate)
             let csrfToken = null;
+            let loginPageSuccess = false;
+            
+            try {
+                const loginPageResponse = await axios.get(`${this.baseUrl}/auth/login`, {
+                    jar: this.cookieJar,
+                    withCredentials: true,
+                    headers: headers,
+                    timeout: 10000
+                });
+                loginPageSuccess = true;
+                this.adapter.log.debug('[Tankinhaltsanzeige] Login-Seite erfolgreich geladen');
 
-            // Format 1: <meta name="csrf-token" content="...">
-            const metaMatch = loginPageResponse.data.match(/<meta\s+name="csrf-token"\s+content="([^"]+)"/i);
-            if (metaMatch) {
-                csrfToken = metaMatch[1];
-            }
-
-            // Format 2: <input type="hidden" name="_csrf" value="...">
-            if (!csrfToken) {
-                const inputMatch = loginPageResponse.data.match(/name="_csrf"\s+value="([^"]+)"/i);
-                if (inputMatch) {
-                    csrfToken = inputMatch[1];
+                // CSRF-Token aus HTML extrahieren (verschiedene mögliche Formate)
+                csrfToken = this.extractCsrfToken(loginPageResponse.data);
+                
+                if (csrfToken) {
+                    this.adapter.log.debug('[Tankinhaltsanzeige] CSRF-Token extrahiert');
+                } else {
+                    this.adapter.log.warn('[Tankinhaltsanzeige] CSRF-Token nicht in HTML gefunden');
                 }
-            }
-
-            // Format 3: JavaScript-Variable
-            if (!csrfToken) {
-                const jsMatch = loginPageResponse.data.match(/csrfToken\s*[:=]\s*['"]([^'"]+)['"]/i);
-                if (jsMatch) {
-                    csrfToken = jsMatch[1];
-                }
-            }
-
-            if (!csrfToken) {
-                this.adapter.log.warn('[Tankinhaltsanzeige] CSRF-Token nicht gefunden, versuche Login ohne Token');
-            } else {
-                this.adapter.log.debug('[Tankinhaltsanzeige] CSRF-Token extrahiert');
+            } catch (e) {
+                this.adapter.log.error('[Tankinhaltsanzeige] Login-Seite konnte nicht geladen werden: ' + e.message);
+                throw new Error('Login-Seite nicht verfügbar');
             }
 
             // Schritt 2: Login durchführen
@@ -393,26 +400,65 @@ class TankinhaltsanzeigeAPI {
                 loginData._csrf = csrfToken;
             }
 
+            this.adapter.log.debug('[Tankinhaltsanzeige] Login-Daten: Benutzername=' + (this.username ? '✓' : '✗') + ', Passwort=' + (this.password ? '✓' : '✗'));
+
+            this.adapter.log.debug('[Tankinhaltsanzeige] Login-Versuch mit URL: ' + `${this.baseUrl}/auth/login`);
+            this.adapter.log.debug('[Tankinhaltsanzeige] Login-Payload: email=' + (this.username ? '✓' : '✗') + ', password=' + (this.password ? '✓' : '✗'));
+
             const loginResponse = await axios.post(`${this.baseUrl}/auth/login`, loginData, {
                 jar: this.cookieJar,
                 withCredentials: true,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                }
+                headers: headers,
+                timeout: 15000
             });
+
+            this.adapter.log.debug('[Tankinhaltsanzeige] Login-Response Status: ' + loginResponse.status);
 
             if (loginResponse.status === 200 || loginResponse.status === 302 || loginResponse.status === 201) {
                 this.isLoggedIn = true;
-                this.adapter.log.info('[Tankinhaltsanzeige] Login successful');
+                this.adapter.log.info('[Tankinhaltsanzeige] Login erfolgreich');
             } else {
-                throw new Error(`Login failed with status ${loginResponse.status}`);
+                throw new Error(`Login fehlgeschlagen mit Status ${loginResponse.status}: ${JSON.stringify(loginResponse.data).substring(0, 200)}`);
             }
         } catch (error) {
-            this.adapter.log.error(`[Tankinhaltsanzeige] Login failed: ${error.message}`);
+            this.adapter.log.error(`[Tankinhaltsanzeige] Login fehlgeschlagen: ${error.message}`);
+            if (error.response) {
+                this.adapter.log.error(`[Tankinhaltsanzeige] Response status: ${error.response.status}, body: ${JSON.stringify(error.response.data).substring(0, 500)}`);
+            }
             this.isLoggedIn = false;
             throw error;
         }
+    }
+
+    /**
+     * Extrahieren Sie das CSRF-Token aus HTML
+     */
+    extractCsrfToken(html) {
+        // Format 1: <meta name="csrf-token" content="...">
+        const metaMatch = html.match(/<meta\s+name="csrf-token"\s+content="([^"]+)"/i);
+        if (metaMatch) {
+            return metaMatch[1];
+        }
+
+        // Format 2: <input type="hidden" name="_csrf" value="...">
+        const inputMatch = html.match(/name="_csrf"\s+value="([^"]+)"/i);
+        if (inputMatch) {
+            return inputMatch[1];
+        }
+
+        // Format 3: JavaScript-Variable
+        const jsMatch = html.match(/csrfToken\s*[:=]\s*['\"]([^'\"]+)['\"]/i);
+        if (jsMatch) {
+            return jsMatch[1];
+        }
+
+        // Format 4: JSON-LD Script-Tag
+        const jsonLdMatch = html.match(/<script[^>]*>.*?csrfToken\s*[:=]\s*['\"]([^'\"]+)['\"]/, i);
+        if (jsonLdMatch) {
+            return jsonLdMatch[1];
+        }
+
+        return null;
     }
 
     /**
@@ -640,16 +686,20 @@ class LiquidCheckAPI {
         try {
             this.adapter.log.info('[LiquidCheck] Logging in...');
 
+            const headers = {
+                'Content-Type': 'application/json',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            };
+
             const loginResponse = await axios.post(`${this.baseUrl}/api/login`, {
                 user: this.username,
-                password: this.password
+                password: this.password,
+                csrfToken: 'null'  // Grafana 6.x+ kann CSRF-Token benötigen
             }, {
                 jar: this.cookieJar,
                 withCredentials: true,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                }
+                headers: headers,
+                timeout: 15000
             });
 
             if (loginResponse.status === 200) {
@@ -661,10 +711,13 @@ class LiquidCheckAPI {
                     this.apiKey = loginResponse.data.apiKey;
                 }
             } else {
-                throw new Error(`Login failed with status ${loginResponse.status}`);
+                throw new Error(`Login fehlgeschlagen mit Status ${loginResponse.status}: ${JSON.stringify(loginResponse.data).substring(0, 200)}`);
             }
         } catch (error) {
-            this.adapter.log.error(`[LiquidCheck] Login failed: ${error.message}`);
+            this.adapter.log.error(`[LiquidCheck] Login fehlgeschlagen: ${error.message}`);
+            if (error.response) {
+                this.adapter.log.error(`[LiquidCheck] Response status: ${error.response.status}, body: ${JSON.stringify(error.response.data).substring(0, 500)}`);
+            }
             this.isLoggedIn = false;
             throw error;
         }
@@ -960,10 +1013,17 @@ class Tankmonitor extends utils.Adapter {
         this.log.info('Tankmonitor adapter starting...');
         this.log.info('Configuration: ' + JSON.stringify(this.config, null, 2));
 
+        // Initialisiere die API-Client-Objekte mit den aktuellen Einstellungen
+        this.log.info('Initialisiere API-Client-Objekte...');
+
         try {
             // Oilview initialisieren
             const oilviewEnabled = (this.config.oilview && this.config.oilview.enabled) || this.config['oilview.enabled'] || this.config.oilview_enabled || (this.config.oilview && this.config.oilview === true);
             this.log.info('Oilview check: ' + JSON.stringify(this.config.oilview) + ' -> enabled: ' + oilviewEnabled);
+            this.log.info('Oilview settings - URL: ' + (this.config.oilview && this.config.oilview.url || this.config['oilview.url'] || 'https://www.oilview.de'));
+            this.log.info('Oilview settings - Username: ' + (this.config.oilview && this.config.oilview.username || this.config['oilview.username'] || ''));
+            this.log.info('Oilview settings - Interval: ' + ((this.config.oilview && this.config.oilview.interval) || this.config['oilview.interval'] || 15) + ' minutes');
+            
             if (oilviewEnabled) {
                 try {
                     this.log.info('Initializing Oilview API...');
@@ -971,6 +1031,9 @@ class Tankmonitor extends utils.Adapter {
                     await this.oilviewAPI.init();
                 } catch (e) {
                     this.log.error('Failed to initialize Oilview: ' + e.message);
+                    if (e.stack) {
+                        this.log.error('Stack trace: ' + e.stack);
+                    }
                 }
             } else {
                 this.log.debug('Oilview is disabled in configuration');
@@ -979,6 +1042,10 @@ class Tankmonitor extends utils.Adapter {
             // Tankinhaltsanzeige initialisieren
             const tankEnabled = (this.config.tankinhaltsanzeige && this.config.tankinhaltsanzeige.enabled) || this.config['tankinhaltsanzeige.enabled'] || this.config.tankinhaltsanzeige_enabled || (this.config.tankinhaltsanzeige && this.config.tankinhaltsanzeige === true);
             this.log.info('Tankinhaltsanzeige check: ' + JSON.stringify(this.config.tankinhaltsanzeige) + ' -> enabled: ' + tankEnabled);
+            this.log.info('Tankinhaltsanzeige settings - URL: ' + (this.config.tankinhaltsanzeige && this.config.tankinhaltsanzeige.url || this.config['tankinhaltsanzeige.url'] || 'https://www.tankinhaltsanzeige.de'));
+            this.log.info('Tankinhaltsanzeige settings - Username: ' + (this.config.tankinhaltsanzeige && this.config.tankinhaltsanzeige.username || this.config['tankinhaltsanzeige.username'] || ''));
+            this.log.info('Tankinhaltsanzeige settings - Interval: ' + ((this.config.tankinhaltsanzeige && this.config.tankinhaltsanzeige.interval) || this.config['tankinhaltsanzeige.interval'] || 30) + ' minutes');
+            
             if (tankEnabled) {
                 try {
                     this.log.info('Initializing Tankinhaltsanzeige API...');
@@ -986,6 +1053,9 @@ class Tankmonitor extends utils.Adapter {
                     await this.tankinhaltsanzeigeAPI.init();
                 } catch (e) {
                     this.log.error('Failed to initialize Tankinhaltsanzeige: ' + e.message);
+                    if (e.stack) {
+                        this.log.error('Stack trace: ' + e.stack);
+                    }
                 }
             } else {
                 this.log.debug('Tankinhaltsanzeige is disabled in configuration');
@@ -994,6 +1064,10 @@ class Tankmonitor extends utils.Adapter {
             // LiquidCheck initialisieren
             const liquidEnabled = (this.config.liquidCheck && this.config.liquidCheck.enabled) || this.config['liquidCheck.enabled'] || this.config.liquidCheck_enabled || (this.config.liquidCheck && this.config.liquidCheck === true);
             this.log.info('LiquidCheck check: ' + JSON.stringify(this.config.liquidCheck) + ' -> enabled: ' + liquidEnabled);
+            this.log.info('LiquidCheck settings - URL: ' + (this.config.liquidCheck && this.config.liquidCheck.url || this.config['liquidCheck.url'] || 'https://liquidcheck.si-elektronik.de'));
+            this.log.info('LiquidCheck settings - Username: ' + (this.config.liquidCheck && this.config.liquidCheck.username || this.config['liquidCheck.username'] || ''));
+            this.log.info('LiquidCheck settings - Interval: ' + ((this.config.liquidCheck && this.config.liquidCheck.interval) || this.config['liquidCheck.interval'] || 5) + ' minutes');
+            
             if (liquidEnabled) {
                 try {
                     this.log.info('Initializing LiquidCheck API...');
@@ -1001,6 +1075,9 @@ class Tankmonitor extends utils.Adapter {
                     await this.liquidCheckAPI.init();
                 } catch (e) {
                     this.log.error('Failed to initialize LiquidCheck: ' + e.message);
+                    if (e.stack) {
+                        this.log.error('Stack trace: ' + e.stack);
+                    }
                 }
             } else {
                 this.log.debug('LiquidCheck is disabled in configuration');
@@ -1020,12 +1097,15 @@ class Tankmonitor extends utils.Adapter {
             // Alle Polling-Intervalle stoppen
             if (this.oilviewAPI) {
                 this.oilviewAPI.stop();
+                this.oilviewAPI = null;
             }
             if (this.tankinhaltsanzeigeAPI) {
                 this.tankinhaltsanzeigeAPI.stop();
+                this.tankinhaltsanzeigeAPI = null;
             }
             if (this.liquidCheckAPI) {
                 this.liquidCheckAPI.stop();
+                this.liquidCheckAPI = null;
             }
 
             this.log.info('Tankmonitor adapter stopped gracefully');
@@ -1034,6 +1114,26 @@ class Tankmonitor extends utils.Adapter {
             this.log.error('Error during adapter unload: ' + e.message);
             callback();
         }
+    }
+
+    stop() {
+        this.log.info('Tankmonitor adapter stop called');
+
+        // Alle Polling-Intervalle stoppen
+        if (this.oilviewAPI) {
+            this.oilviewAPI.stop();
+            this.oilviewAPI = null;
+        }
+        if (this.tankinhaltsanzeigeAPI) {
+            this.tankinhaltsanzeigeAPI.stop();
+            this.tankinhaltsanzeigeAPI = null;
+        }
+        if (this.liquidCheckAPI) {
+            this.liquidCheckAPI.stop();
+            this.liquidCheckAPI = null;
+        }
+
+        this.log.info('Tankmonitor adapter stopped');
     }
 }
 
