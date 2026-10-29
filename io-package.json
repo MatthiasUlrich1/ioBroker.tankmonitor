@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "tankmonitor",
-    "version": "0.0.9",
+    "version": "0.1.0",
     "news": {
+      "0.1.0": {
+        "en": "Unique flat config keys per platform - each platform can now be enabled independently and settings persist after save/restart",
+        "de": "Eindeutige flache Config-Keys pro Plattform - jede Plattform kann jetzt unabhängig aktiviert werden, Einstellungen bleiben nach Speichern/Neustart erhalten"
+      },
       "0.0.9": {
         "en": "Fix Admin UI config saving: use nested native structure so settings persist after save/restart",
         "de": "Admin-UI Konfigurations-Speichern behoben: verschachtelte native-Struktur, damit Einstellungen nach Speichern/Neustart erhalten bleiben"
@@ -60,32 +64,26 @@
     ]
   },
   "encryptedNative": [
-    "oilview.password",
-    "tankinhaltsanzeige.password",
-    "liquidCheck.password"
+    "oilviewPassword",
+    "tankPassword",
+    "liquidCheckPassword"
   ],
   "native": {
-    "oilview": {
-      "enabled": false,
-      "url": "https://www.oilview.de",
-      "username": "",
-      "password": "",
-      "interval": 15
-    },
-    "tankinhaltsanzeige": {
-      "enabled": false,
-      "url": "https://www.tankinhaltsanzeige.de",
-      "username": "",
-      "password": "",
-      "interval": 30
-    },
-    "liquidCheck": {
-      "enabled": false,
-      "url": "https://liquidcheck.si-elektronik.de",
-      "username": "",
-      "password": "",
-      "interval": 5
-    }
+    "oilviewEnabled": false,
+    "oilviewUrl": "https://www.oilview.de",
+    "oilviewUsername": "",
+    "oilviewPassword": "",
+    "oilviewInterval": 15,
+    "tankEnabled": false,
+    "tankUrl": "https://www.tankinhaltsanzeige.de",
+    "tankUsername": "",
+    "tankPassword": "",
+    "tankInterval": 30,
+    "liquidCheckEnabled": false,
+    "liquidCheckUrl": "https://liquidcheck.si-elektronik.de",
+    "liquidCheckUsername": "",
+    "liquidCheckPassword": "",
+    "liquidCheckInterval": 5
   },
   "instanceObjects": [],
   "instanceStates": [],

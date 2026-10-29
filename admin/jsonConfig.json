@@ -6,42 +6,43 @@
             "type": "panel",
             "label": "Oilview Settings",
             "items": {
-                "enabled": {
+                "oilviewEnabled": {
                     "type": "checkbox",
                     "label": "Enable Oilview",
+                    "default": false,
                     "xs": 12,
                     "sm": 6
                 },
-                "url": {
+                "oilviewUrl": {
                     "type": "text",
                     "label": "URL",
                     "default": "https://www.oilview.de",
                     "xs": 12,
                     "sm": 6,
-                    "hidden": "!data.oilview.enabled"
+                    "hidden": "!data.oilviewEnabled"
                 },
-                "username": {
+                "oilviewUsername": {
                     "type": "text",
                     "label": "Username / E-Mail",
                     "xs": 12,
                     "sm": 6,
-                    "hidden": "!data.oilview.enabled"
+                    "hidden": "!data.oilviewEnabled"
                 },
-                "password": {
+                "oilviewPassword": {
                     "type": "password",
                     "label": "Password",
                     "xs": 12,
                     "sm": 6,
-                    "hidden": "!data.oilview.enabled"
+                    "hidden": "!data.oilviewEnabled"
                 },
-                "interval": {
+                "oilviewInterval": {
                     "type": "number",
                     "label": "Interval (Minutes)",
                     "min": 5,
                     "default": 15,
                     "xs": 12,
                     "sm": 6,
-                    "hidden": "!data.oilview.enabled"
+                    "hidden": "!data.oilviewEnabled"
                 }
             }
         },
@@ -49,42 +50,43 @@
             "type": "panel",
             "label": "Tankinhaltsanzeige Settings",
             "items": {
-                "enabled": {
+                "tankEnabled": {
                     "type": "checkbox",
                     "label": "Enable Tankinhaltsanzeige",
+                    "default": false,
                     "xs": 12,
                     "sm": 6
                 },
-                "url": {
+                "tankUrl": {
                     "type": "text",
                     "label": "URL",
                     "default": "https://www.tankinhaltsanzeige.de",
                     "xs": 12,
                     "sm": 6,
-                    "hidden": "!data.tankinhaltsanzeige.enabled"
+                    "hidden": "!data.tankEnabled"
                 },
-                "username": {
+                "tankUsername": {
                     "type": "text",
                     "label": "Username / E-Mail",
                     "xs": 12,
                     "sm": 6,
-                    "hidden": "!data.tankinhaltsanzeige.enabled"
+                    "hidden": "!data.tankEnabled"
                 },
-                "password": {
+                "tankPassword": {
                     "type": "password",
                     "label": "Password",
                     "xs": 12,
                     "sm": 6,
-                    "hidden": "!data.tankinhaltsanzeige.enabled"
+                    "hidden": "!data.tankEnabled"
                 },
-                "interval": {
+                "tankInterval": {
                     "type": "number",
                     "label": "Interval (Minutes)",
                     "min": 5,
                     "default": 30,
                     "xs": 12,
                     "sm": 6,
-                    "hidden": "!data.tankinhaltsanzeige.enabled"
+                    "hidden": "!data.tankEnabled"
                 }
             }
         },
@@ -92,42 +94,43 @@
             "type": "panel",
             "label": "LiquidCheck (Grafana) Settings",
             "items": {
-                "enabled": {
+                "liquidCheckEnabled": {
                     "type": "checkbox",
                     "label": "Enable LiquidCheck",
+                    "default": false,
                     "xs": 12,
                     "sm": 6
                 },
-                "url": {
+                "liquidCheckUrl": {
                     "type": "text",
                     "label": "Grafana URL",
                     "default": "https://liquidcheck.si-elektronik.de",
                     "xs": 12,
                     "sm": 6,
-                    "hidden": "!data.liquidCheck.enabled"
+                    "hidden": "!data.liquidCheckEnabled"
                 },
-                "username": {
+                "liquidCheckUsername": {
                     "type": "text",
                     "label": "Username / E-Mail",
                     "xs": 12,
                     "sm": 6,
-                    "hidden": "!data.liquidCheck.enabled"
+                    "hidden": "!data.liquidCheckEnabled"
                 },
-                "password": {
+                "liquidCheckPassword": {
                     "type": "password",
                     "label": "Password",
                     "xs": 12,
                     "sm": 6,
-                    "hidden": "!data.liquidCheck.enabled"
+                    "hidden": "!data.liquidCheckEnabled"
                 },
-                "interval": {
+                "liquidCheckInterval": {
                     "type": "number",
                     "label": "Interval (Minutes)",
                     "min": 5,
                     "default": 5,
                     "xs": 12,
                     "sm": 6,
-                    "hidden": "!data.liquidCheck.enabled"
+                    "hidden": "!data.liquidCheckEnabled"
                 }
             }
         }

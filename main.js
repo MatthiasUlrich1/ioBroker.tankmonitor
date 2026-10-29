@@ -12,11 +12,11 @@ const axios = wrapper(require('axios'));
 class OilviewAPI {
     constructor(adapter) {
         this.adapter = adapter;
-        const cfg = this.adapter.config.oilview || {};
-        this.baseUrl = cfg.url || this.adapter.config['oilview.url'] || 'https://www.oilview.de';
-        this.username = cfg.username || this.adapter.config['oilview.username'];
-        this.password = cfg.password || this.adapter.config['oilview.password'];
-        this.interval = ((cfg.interval || this.adapter.config['oilview.interval']) || 15) * 60 * 1000; // Minuten zu ms
+        const cfg = this.adapter.config;
+        this.baseUrl = cfg.oilviewUrl || (cfg.oilview && cfg.oilview.url) || cfg['oilview.url'] || 'https://www.oilview.de';
+        this.username = cfg.oilviewUsername || (cfg.oilview && cfg.oilview.username) || cfg['oilview.username'];
+        this.password = cfg.oilviewPassword || (cfg.oilview && cfg.oilview.password) || cfg['oilview.password'];
+        this.interval = ((cfg.oilviewInterval || (cfg.oilview && cfg.oilview.interval) || cfg['oilview.interval']) || 15) * 60 * 1000; // Minuten zu ms
         this.cookieJar = new CookieJar();
         this.sessionToken = null;
         this.devices = [];
@@ -336,10 +336,11 @@ class OilviewAPI {
 class TankinhaltsanzeigeAPI {
     constructor(adapter) {
         this.adapter = adapter;
-        this.baseUrl = this.adapter.config['tankinhaltsanzeige.url'] || this.adapter.config.tankinhaltsanzeige_url || 'https://www.tankinhaltsanzeige.de';
-        this.username = this.adapter.config['tankinhaltsanzeige.username'] || this.adapter.config.tankinhaltsanzeige_username;
-        this.password = this.adapter.config['tankinhaltsanzeige.password'] || this.adapter.config.tankinhaltsanzeige_password;
-        this.interval = ((this.adapter.config['tankinhaltsanzeige.interval'] || this.adapter.config.tankinhaltsanzeige_interval) || 30) * 60 * 1000;
+        const cfg = this.adapter.config;
+        this.baseUrl = cfg.tankUrl || cfg['tankinhaltsanzeige.url'] || cfg.tankinhaltsanzeige_url || 'https://www.tankinhaltsanzeige.de';
+        this.username = cfg.tankUsername || cfg['tankinhaltsanzeige.username'] || cfg.tankinhaltsanzeige_username;
+        this.password = cfg.tankPassword || cfg['tankinhaltsanzeige.password'] || cfg.tankinhaltsanzeige_password;
+        this.interval = ((cfg.tankInterval || cfg['tankinhaltsanzeige.interval'] || cfg.tankinhaltsanzeige_interval) || 30) * 60 * 1000;
         this.cookieJar = new CookieJar();
         this.sessionToken = null;
         this.stations = [];
@@ -640,10 +641,11 @@ class TankinhaltsanzeigeAPI {
 class LiquidCheckAPI {
     constructor(adapter) {
         this.adapter = adapter;
-        this.baseUrl = this.adapter.config['liquidCheck.url'] || this.adapter.config.liquidCheck_url || 'https://liquidcheck.si-elektronik.de';
-        this.username = this.adapter.config['liquidCheck.username'] || this.adapter.config.liquidCheck_username;
-        this.password = this.adapter.config['liquidCheck.password'] || this.adapter.config.liquidCheck_password;
-        this.interval = ((this.adapter.config['liquidCheck.interval'] || this.adapter.config.liquidCheck_interval) || 5) * 60 * 1000;
+        const cfg = this.adapter.config;
+        this.baseUrl = cfg.liquidCheckUrl || cfg['liquidCheck.url'] || cfg.liquidCheck_url || 'https://liquidcheck.si-elektronik.de';
+        this.username = cfg.liquidCheckUsername || cfg['liquidCheck.username'] || cfg.liquidCheck_username;
+        this.password = cfg.liquidCheckPassword || cfg['liquidCheck.password'] || cfg.liquidCheck_password;
+        this.interval = ((cfg.liquidCheckInterval || cfg['liquidCheck.interval'] || cfg.liquidCheck_interval) || 5) * 60 * 1000;
         this.cookieJar = new CookieJar();
         this.apiKey = null;
         this.dashboards = [];
@@ -1017,11 +1019,14 @@ class Tankmonitor extends utils.Adapter {
 
         try {
             // Oilview initialisieren
-            const oilviewEnabled = (this.config.oilview && this.config.oilview.enabled) || this.config['oilview.enabled'] || this.config.oilview_enabled || (this.config.oilview && this.config.oilview === true);
-            this.log.info('Oilview check: ' + JSON.stringify(this.config.oilview) + ' -> enabled: ' + oilviewEnabled);
-            this.log.info('Oilview settings - URL: ' + (this.config.oilview && this.config.oilview.url || this.config['oilview.url'] || 'https://www.oilview.de'));
-            this.log.info('Oilview settings - Username: ' + (this.config.oilview && this.config.oilview.username || this.config['oilview.username'] || ''));
-            this.log.info('Oilview settings - Interval: ' + ((this.config.oilview && this.config.oilview.interval) || this.config['oilview.interval'] || 15) + ' minutes');
+            const oilviewEnabled = this.config.oilviewEnabled
+                || (this.config.oilview && this.config.oilview.enabled)
+                || this.config['oilview.enabled']
+                || this.config.oilview_enabled;
+            this.log.info('Oilview check: enabled=' + oilviewEnabled);
+            this.log.info('Oilview settings - URL: ' + (this.config.oilviewUrl || (this.config.oilview && this.config.oilview.url) || this.config['oilview.url'] || 'https://www.oilview.de'));
+            this.log.info('Oilview settings - Username: ' + (this.config.oilviewUsername || (this.config.oilview && this.config.oilview.username) || this.config['oilview.username'] || ''));
+            this.log.info('Oilview settings - Interval: ' + ((this.config.oilviewInterval || (this.config.oilview && this.config.oilview.interval) || this.config['oilview.interval']) || 15) + ' minutes');
             
             if (oilviewEnabled) {
                 try {
@@ -1039,11 +1044,14 @@ class Tankmonitor extends utils.Adapter {
             }
 
             // Tankinhaltsanzeige initialisieren
-            const tankEnabled = (this.config.tankinhaltsanzeige && this.config.tankinhaltsanzeige.enabled) || this.config['tankinhaltsanzeige.enabled'] || this.config.tankinhaltsanzeige_enabled || (this.config.tankinhaltsanzeige && this.config.tankinhaltsanzeige === true);
-            this.log.info('Tankinhaltsanzeige check: ' + JSON.stringify(this.config.tankinhaltsanzeige) + ' -> enabled: ' + tankEnabled);
-            this.log.info('Tankinhaltsanzeige settings - URL: ' + (this.config.tankinhaltsanzeige && this.config.tankinhaltsanzeige.url || this.config['tankinhaltsanzeige.url'] || 'https://www.tankinhaltsanzeige.de'));
-            this.log.info('Tankinhaltsanzeige settings - Username: ' + (this.config.tankinhaltsanzeige && this.config.tankinhaltsanzeige.username || this.config['tankinhaltsanzeige.username'] || ''));
-            this.log.info('Tankinhaltsanzeige settings - Interval: ' + ((this.config.tankinhaltsanzeige && this.config.tankinhaltsanzeige.interval) || this.config['tankinhaltsanzeige.interval'] || 30) + ' minutes');
+            const tankEnabled = this.config.tankEnabled
+                || (this.config.tankinhaltsanzeige && this.config.tankinhaltsanzeige.enabled)
+                || this.config['tankinhaltsanzeige.enabled']
+                || this.config.tankinhaltsanzeige_enabled;
+            this.log.info('Tankinhaltsanzeige check: enabled=' + tankEnabled);
+            this.log.info('Tankinhaltsanzeige settings - URL: ' + (this.config.tankUrl || (this.config.tankinhaltsanzeige && this.config.tankinhaltsanzeige.url) || this.config['tankinhaltsanzeige.url'] || 'https://www.tankinhaltsanzeige.de'));
+            this.log.info('Tankinhaltsanzeige settings - Username: ' + (this.config.tankUsername || (this.config.tankinhaltsanzeige && this.config.tankinhaltsanzeige.username) || this.config['tankinhaltsanzeige.username'] || ''));
+            this.log.info('Tankinhaltsanzeige settings - Interval: ' + ((this.config.tankInterval || (this.config.tankinhaltsanzeige && this.config.tankinhaltsanzeige.interval) || this.config['tankinhaltsanzeige.interval']) || 30) + ' minutes');
             
             if (tankEnabled) {
                 try {
@@ -1061,11 +1069,14 @@ class Tankmonitor extends utils.Adapter {
             }
 
             // LiquidCheck initialisieren
-            const liquidEnabled = (this.config.liquidCheck && this.config.liquidCheck.enabled) || this.config['liquidCheck.enabled'] || this.config.liquidCheck_enabled || (this.config.liquidCheck && this.config.liquidCheck === true);
-            this.log.info('LiquidCheck check: ' + JSON.stringify(this.config.liquidCheck) + ' -> enabled: ' + liquidEnabled);
-            this.log.info('LiquidCheck settings - URL: ' + (this.config.liquidCheck && this.config.liquidCheck.url || this.config['liquidCheck.url'] || 'https://liquidcheck.si-elektronik.de'));
-            this.log.info('LiquidCheck settings - Username: ' + (this.config.liquidCheck && this.config.liquidCheck.username || this.config['liquidCheck.username'] || ''));
-            this.log.info('LiquidCheck settings - Interval: ' + ((this.config.liquidCheck && this.config.liquidCheck.interval) || this.config['liquidCheck.interval'] || 5) + ' minutes');
+            const liquidEnabled = this.config.liquidCheckEnabled
+                || (this.config.liquidCheck && this.config.liquidCheck.enabled)
+                || this.config['liquidCheck.enabled']
+                || this.config.liquidCheck_enabled;
+            this.log.info('LiquidCheck check: enabled=' + liquidEnabled);
+            this.log.info('LiquidCheck settings - URL: ' + (this.config.liquidCheckUrl || (this.config.liquidCheck && this.config.liquidCheck.url) || this.config['liquidCheck.url'] || 'https://liquidcheck.si-elektronik.de'));
+            this.log.info('LiquidCheck settings - Username: ' + (this.config.liquidCheckUsername || (this.config.liquidCheck && this.config.liquidCheck.username) || this.config['liquidCheck.username'] || ''));
+            this.log.info('LiquidCheck settings - Interval: ' + ((this.config.liquidCheckInterval || (this.config.liquidCheck && this.config.liquidCheck.interval) || this.config['liquidCheck.interval']) || 5) + ' minutes');
             
             if (liquidEnabled) {
                 try {
