@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "tankmonitor",
-    "version": "0.1.6",
+    "version": "0.1.7",
     "news": {
+      "0.1.7": {
+        "en": "LiquidCheck: Complete datasource resolution fix – use {type, uid, name} Prometheus object when panel.datasource is null. Add auto re-login on 401 during panel queries.",
+        "de": "LiquidCheck: Datasource-Auflösung vollständig behoben – Prometheus-Objekt {type, uid, name} wenn panel.datasource null ist. Automatischer Re-Login bei 401 während Panel-Queries."
+      },
       "0.1.6": {
         "en": "Tankinhaltsanzeige: Use /api/stationen JSON endpoint instead of HTML parsing (reliable data with correct station IDs and values)",
         "de": "Tankinhaltsanzeige: JSON-Endpunkt /api/stationen statt HTML-Parsing (zuverlässige Daten mit korrekten Stations-IDs und Werten)"
