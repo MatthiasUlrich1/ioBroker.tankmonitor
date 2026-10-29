@@ -8,7 +8,6 @@
         "de": "LiquidCheck: lastUpdate und dashboardName werden jetzt für jedes Dashboard gesetzt, auch wenn kein Panel Daten lieferte (Dashboard offline oder Job ohne Samples)"
       },
       "0.1.9": {
-      "0.1.9": {
         "en": "LiquidCheck: Robustness fix – Fresh login before every polling cycle (prevents 401 errors). Switched from instant queries to time-series range queries (prevents empty values).",
         "de": "LiquidCheck: Robustheits-Fix – Frischer Login vor jedem Polling-Zyklus (verhindert 401-Fehler). Wechsel von Instant-Queries zu Zeitreihen-Range-Queries (verhindert leere Werte)."
       },
