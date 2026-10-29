@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "tankmonitor",
-    "version": "0.1.2",
+    "version": "0.1.3",
     "news": {
+      "0.1.3": {
+        "en": "Oilview: Fetch full sensor details (value, pct, net_pct, net_free_space, capacity, net_capacity, fill_limit) per tank from /api/v2/devices. LiquidCheck: Fix datasource resolution for panel queries when target.datasource is undefined.",
+        "de": "Oilview: Volle Sensor-Details (Bestand Liter, %, Nutzvolumen %, Freiraum, Kapazität, Füllgrenze) pro Tank über /api/v2/devices abfragen. LiquidCheck: Datasource-Auflösung für Panel-Queries repariert wenn target.datasource undefined ist."
+      },
       "0.1.2": {
         "en": "Fix Oilview sensor data fetch: use /api/v2/devices/{id}/process endpoint with correct response format parsing",
         "de": "Oilview Sensor-Daten repariert: /api/v2/devices/{id}/process Endpoint mit korrekter Antwortformat-Parsing"
