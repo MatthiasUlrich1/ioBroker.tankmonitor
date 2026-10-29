@@ -8,7 +8,6 @@
         "de": "LiquidCheck: Wechsel auf nativen Prometheus-Proxy-Endpunkt (/api/datasources/proxy/{id}/api/v1/query) - behebt den 500 'datasource missing name' Fehler endgültig"
       },
       "0.1.7": {
-      "0.1.7": {
         "en": "LiquidCheck: Complete datasource resolution fix – use {type, uid, name} Prometheus object when panel.datasource is null. Add auto re-login on 401 during panel queries.",
         "de": "LiquidCheck: Datasource-Auflösung vollständig behoben – Prometheus-Objekt {type, uid, name} wenn panel.datasource null ist. Automatischer Re-Login bei 401 während Panel-Queries."
       },
