@@ -520,30 +520,33 @@ class TankinhaltsanzeigeAPI {
     }
 
     /**
-     * Entdeckt alle verfügbaren Stationen
+     * Entdeckt alle verfügbaren Stationen und Tanks von der Hauptseite (HTML-Parsing)
      */
     async discoverStations() {
         try {
-            this.adapter.log.info('[Tankinhaltsanzeige] Discovering stations...');
+            this.adapter.log.info('[Tankinhaltsanzeige] Discovering stations from main page...');
 
-            const response = await axios.get(`${this.baseUrl}/api/stationen`, {
+            const response = await axios.get(`${this.baseUrl}/`, {
                 jar: this.cookieJar,
                 withCredentials: true,
                 headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                }
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    'Accept': 'text/html'
+                },
+                timeout: 15000,
+                validateStatus: status => status < 500
             });
 
-            if (response.data && Array.isArray(response.data)) {
-                this.stations = response.data;
-                this.adapter.log.info(`[Tankinhaltsanzeige] Found ${this.stations.length} station(s)`);
+            if (response.status >= 400) {
+                throw new Error(`HTTP ${response.status} beim Laden der Hauptseite`);
+            }
 
-                // States für jede Station erstellen
-                for (const station of this.stations) {
-                    await this.createStationStates(station);
-                }
-            } else {
-                throw new Error('Unexpected response format from /api/stationen');
+            const html = response.data || '';
+            this.stations = this.parseStationsFromHtml(html);
+            this.adapter.log.info(`[Tankinhaltsanzeige] Found ${this.stations.length} station/tank item(s)`);
+
+            for (const station of this.stations) {
+                await this.createStationStates(station);
             }
         } catch (error) {
             this.adapter.log.error(`[Tankinhaltsanzeige] Station discovery failed: ${error.message}`);
@@ -552,81 +555,150 @@ class TankinhaltsanzeigeAPI {
     }
 
     /**
-     * Erstellt ioBroker States für eine Station
+     * Parst Stationen und Tanks aus der HTML-Tabelle der Startseite
+     */
+    parseStationsFromHtml(html) {
+        const items = [];
+        try {
+            // Finde Tabellenzeilen in der Haupttabelle
+            // Beispiel Zeile: 1003Nordhausen | 1 | Diesel | 947 | 17473 | 0 | 35% | 29.10.2026 - 22:06:19 | 31027 | 50000 | 0
+            // Wir suchen nach <tr> Blöcken oder Tabellenzeilen
+            const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+            let match;
+
+            while ((match = rowRegex.exec(html)) !== null) {
+                const rowHtml = match[1];
+                const tdRegex = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+                const cells = [];
+                let tdMatch;
+                while ((tdMatch = tdRegex.exec(rowHtml)) !== null) {
+                    // HTML-Tags entfernen und Whitespace bereinigen
+                    const cleanText = tdMatch[1].replace(/<[^>]+>/g, '').trim();
+                    cells.push(cleanText);
+                }
+
+                // Wenn die Zeile genug Zellen hat (mind. Tankstelle, Tank, Produkt, Füllstand, Inhalt)
+                if (cells.length >= 9) {
+                    const stationName = cells[0].replace(/\s+/g, ' ').trim();
+                    const tankNr = cells[1].trim();
+                    const product = cells[2].trim();
+                    const fillingHeight = parseFloat(cells[3].replace(',', '.')) || 0;
+                    const levelLiters = parseFloat(cells[4].replace(/\./g, '').replace(',', '.')) || 0;
+                    const levelPercentStr = cells[6].replace('%', '').replace(',', '.').trim();
+                    const levelPercent = parseFloat(levelPercentStr) || 0;
+                    const dateTime = cells[7].trim();
+                    const freeSpace = parseFloat(cells[8].replace(/\./g, '').replace(',', '.')) || 0;
+                    const capacity = cells[9] ? parseFloat(cells[9].replace(/\./g, '').replace(',', '.')) || 0 : 0;
+                    const temperature = cells[10] ? parseFloat(cells[10].replace(',', '.')) || 0 : 0;
+
+                    if (stationName && stationName.toLowerCase() !== 'tankstelle') {
+                        const stationId = `station_${stationName.replace(/[^a-zA-Z0-9_]/g, '_')}_tank_${tankNr}`;
+                        items.push({
+                            id: stationId,
+                            stationName,
+                            tankNr,
+                            product,
+                            fillingHeight,
+                            levelLiters,
+                            levelPercent,
+                            dateTime,
+                            freeSpace,
+                            capacity,
+                            temperature
+                        });
+                    }
+                }
+            }
+        } catch (e) {
+            this.adapter.log.warn(`[Tankinhaltsanzeige] HTML parsing warning: ${e.message}`);
+        }
+        return items;
+    }
+
+    /**
+     * Erstellt ioBroker States für eine Station/Tank
      */
     async createStationStates(station) {
-        const stationId = station.id || station.stationId || `station_${station.name || 'unknown'}`;
+        const stationId = station.id;
         const stationPath = `tankinhaltsanzeige.${stationId}`;
 
         this.adapter.log.debug(`[Tankinhaltsanzeige] Creating states for station: ${stationId}`);
 
-        // Station-Ordner erstellen
-        this.adapter.log.debug('[Tankinhaltsanzeige] Creating station channel object: ' + stationPath);
         await this.adapter.extendObjectAsync(stationPath, {
             type: 'channel',
             common: {
-                name: station.name || stationId
+                name: `${station.stationName} - Tank ${station.tankNr} (${station.product})`
             },
             native: {}
         });
-        this.adapter.log.debug('[Tankinhaltsanzeige] Created station channel object: ' + stationPath);
 
-        // Standard-States erstellen
         const states = [
-            { id: 'levelPercent', name: 'Füllstand (%)', type: 'number', unit: '%' },
-            { id: 'levelLiters', name: 'Füllstand (Liter)', type: 'number', unit: 'l' },
-            { id: 'volumeMax', name: 'Maximales Volumen', type: 'number', unit: 'l' },
-            { id: 'temperature', name: 'Temperatur', type: 'number', unit: '°C' },
-            { id: 'battery', name: 'Batterie', type: 'number', unit: '%' },
-            { id: 'signalStrength', name: 'Signalstärke', type: 'number', unit: '%' },
-            { id: 'lastUpdate', name: 'Letztes Update', type: 'string' },
-            { id: 'stationName', name: 'Stationsname', type: 'string' }
+            { id: 'levelPercent', name: 'Füllstand (%)', type: 'number', role: 'value', unit: '%' },
+            { id: 'levelLiters', name: 'Füllstand (Liter)', type: 'number', role: 'value', unit: 'l' },
+            { id: 'volumeMax', name: 'Gesamtkapazität (Liter)', type: 'number', role: 'value', unit: 'l' },
+            { id: 'freeSpace', name: 'Freiraum (Liter)', type: 'number', role: 'value', unit: 'l' },
+            { id: 'fillingHeight', name: 'Füllhöhe (mm)', type: 'number', role: 'value', unit: 'mm' },
+            { id: 'temperature', name: 'Temperatur', type: 'number', role: 'value', unit: '°C' },
+            { id: 'product', name: 'Produkt', type: 'string', role: 'text', unit: '' },
+            { id: 'lastUpdate', name: 'Letztes Update', type: 'string', role: 'date', unit: '' }
         ];
 
         for (const state of states) {
-            this.adapter.log.debug(`[Tankinhaltsanzeige] Creating state: ${stationPath}.${state.id}`);
             await this.adapter.extendObjectAsync(`${stationPath}.${state.id}`, {
                 type: 'state',
                 common: {
                     name: state.name,
                     type: state.type,
-                    role: 'value',
+                    role: state.role,
                     unit: state.unit,
                     read: true,
                     write: false
                 },
                 native: {}
             });
-            this.adapter.log.debug(`[Tankinhaltsanzeige] Created state: ${stationPath}.${state.id}`);
         }
     }
 
     /**
-     * Holt Daten für alle Stationen
+     * Holt Daten für alle Stationen (von Hauptseite parsen)
      */
     async fetchStationData() {
         try {
-            this.adapter.log.debug('[Tankinhaltsanzeige] Fetching station data...');
+            this.adapter.log.debug('[Tankinhaltsanzeige] Fetching station data from main page...');
 
-            // Aktuelle Daten von der API holen
-            const response = await axios.get(`${this.baseUrl}/api/stationen`, {
+            const response = await axios.get(`${this.baseUrl}/`, {
                 jar: this.cookieJar,
                 withCredentials: true,
                 headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                }
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    'Accept': 'text/html'
+                },
+                timeout: 15000,
+                validateStatus: status => status < 500
             });
 
-            if (response.data && Array.isArray(response.data)) {
-                for (const station of response.data) {
-                    const stationId = station.id || station.stationId || `station_${station.name || 'unknown'}`;
-                    await this.updateStationStates(stationId, station);
-                }
+            if (response.status >= 400) {
+                this.adapter.log.warn(`[Tankinhaltsanzeige] Stations HTTP ${response.status}`);
+                return;
+            }
+
+            const stations = this.parseStationsFromHtml(response.data || '');
+            for (const station of stations) {
+                const stationId = station.id;
+                const stationPath = `tankinhaltsanzeige.${stationId}`;
+
+                await this.adapter.setStateAsync(`${stationPath}.levelPercent`, { val: station.levelPercent, ack: true });
+                await this.adapter.setStateAsync(`${stationPath}.levelLiters`, { val: station.levelLiters, ack: true });
+                await this.adapter.setStateAsync(`${stationPath}.volumeMax`, { val: station.capacity, ack: true });
+                await this.adapter.setStateAsync(`${stationPath}.freeSpace`, { val: station.freeSpace, ack: true });
+                await this.adapter.setStateAsync(`${stationPath}.fillingHeight`, { val: station.fillingHeight, ack: true });
+                await this.adapter.setStateAsync(`${stationPath}.temperature`, { val: station.temperature, ack: true });
+                await this.adapter.setStateAsync(`${stationPath}.product`, { val: station.product, ack: true });
+                await this.adapter.setStateAsync(`${stationPath}.lastUpdate`, { val: station.dateTime, ack: true });
             }
         } catch (error) {
             this.adapter.log.error(`[Tankinhaltsanzeige] Station data fetch failed: ${error.message}`);
 
-            // Bei 401 Fehler: Re-Login versuchen
             if (error.response && error.response.status === 401) {
                 this.adapter.log.warn('[Tankinhaltsanzeige] Session expired, attempting re-login...');
                 this.isLoggedIn = false;
@@ -636,39 +708,6 @@ class TankinhaltsanzeigeAPI {
                 }
             }
             throw error;
-        }
-    }
-
-    /**
-     * Aktualisiert die States für eine Station
-     */
-    async updateStationStates(stationId, data) {
-        const stationPath = `tankinhaltsanzeige.${stationId}`;
-
-        try {
-            this.adapter.log.debug(`[Tankinhaltsanzeige] Updating states for station: ${stationId}`);
-
-            const stateUpdates = [
-                { id: 'levelPercent', val: data.levelPercent || data.fuellstandProzent || data.fillLevelPercent || null },
-                { id: 'levelLiters', val: data.levelLiters || data.fuellstandLiter || data.fillLevelLiters || data.volume || null },
-                { id: 'volumeMax', val: data.volumeMax || data.maxVolume || data.maxVolumen || null },
-                { id: 'temperature', val: data.temperature || data.temp || null },
-                { id: 'battery', val: data.battery || data.batteryLevel || null },
-                { id: 'signalStrength', val: data.signalStrength || data.signal || data.rssi || null },
-                { id: 'lastUpdate', val: new Date().toISOString() },
-                { id: 'stationName', val: data.name || stationId }
-            ];
-
-            for (const update of stateUpdates) {
-                await this.adapter.setStateAsync(`${stationPath}.${update.id}`, {
-                    val: update.val,
-                    ack: true
-                });
-            }
-
-            this.adapter.log.debug(`[Tankinhaltsanzeige] Updated states for station ${stationId}`);
-        } catch (error) {
-            this.adapter.log.error(`[Tankinhaltsanzeige] Failed to update states for ${stationId}: ${error.message}`);
         }
     }
 
