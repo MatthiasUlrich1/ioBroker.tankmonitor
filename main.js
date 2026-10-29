@@ -12,10 +12,11 @@ const axios = wrapper(require('axios'));
 class OilviewAPI {
     constructor(adapter) {
         this.adapter = adapter;
-        this.baseUrl = this.adapter.config['oilview.url'] || this.adapter.config.oilview_url || 'https://www.oilview.de';
-        this.username = this.adapter.config['oilview.username'] || this.adapter.config.oilview_username;
-        this.password = this.adapter.config['oilview.password'] || this.adapter.config.oilview_password;
-        this.interval = ((this.adapter.config['oilview.interval'] || this.adapter.config.oilview_interval) || 15) * 60 * 1000; // Minuten zu ms
+        const cfg = this.adapter.config.oilview || {};
+        this.baseUrl = cfg.url || this.adapter.config['oilview.url'] || 'https://www.oilview.de';
+        this.username = cfg.username || this.adapter.config['oilview.username'];
+        this.password = cfg.password || this.adapter.config['oilview.password'];
+        this.interval = ((cfg.interval || this.adapter.config['oilview.interval']) || 15) * 60 * 1000; // Minuten zu ms
         this.cookieJar = new CookieJar();
         this.sessionToken = null;
         this.devices = [];
@@ -961,7 +962,9 @@ class Tankmonitor extends utils.Adapter {
 
         try {
             // Oilview initialisieren
-            if (this.config['oilview.enabled']) {
+            const oilviewEnabled = (this.config.oilview && this.config.oilview.enabled) || this.config['oilview.enabled'] || this.config.oilview_enabled || (this.config.oilview && this.config.oilview === true);
+            this.log.info('Oilview check: ' + JSON.stringify(this.config.oilview) + ' -> enabled: ' + oilviewEnabled);
+            if (oilviewEnabled) {
                 try {
                     this.log.info('Initializing Oilview API...');
                     this.oilviewAPI = new OilviewAPI(this);
@@ -974,7 +977,9 @@ class Tankmonitor extends utils.Adapter {
             }
 
             // Tankinhaltsanzeige initialisieren
-            if (this.config['tankinhaltsanzeige.enabled']) {
+            const tankEnabled = (this.config.tankinhaltsanzeige && this.config.tankinhaltsanzeige.enabled) || this.config['tankinhaltsanzeige.enabled'] || this.config.tankinhaltsanzeige_enabled || (this.config.tankinhaltsanzeige && this.config.tankinhaltsanzeige === true);
+            this.log.info('Tankinhaltsanzeige check: ' + JSON.stringify(this.config.tankinhaltsanzeige) + ' -> enabled: ' + tankEnabled);
+            if (tankEnabled) {
                 try {
                     this.log.info('Initializing Tankinhaltsanzeige API...');
                     this.tankinhaltsanzeigeAPI = new TankinhaltsanzeigeAPI(this);
@@ -987,7 +992,9 @@ class Tankmonitor extends utils.Adapter {
             }
 
             // LiquidCheck initialisieren
-            if (this.config['liquidCheck.enabled']) {
+            const liquidEnabled = (this.config.liquidCheck && this.config.liquidCheck.enabled) || this.config['liquidCheck.enabled'] || this.config.liquidCheck_enabled || (this.config.liquidCheck && this.config.liquidCheck === true);
+            this.log.info('LiquidCheck check: ' + JSON.stringify(this.config.liquidCheck) + ' -> enabled: ' + liquidEnabled);
+            if (liquidEnabled) {
                 try {
                     this.log.info('Initializing LiquidCheck API...');
                     this.liquidCheckAPI = new LiquidCheckAPI(this);

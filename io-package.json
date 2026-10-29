@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "tankmonitor",
-    "version": "0.0.6",
+    "version": "0.0.7",
     "news": {
+      "0.0.7": {
+        "en": "Add enhanced config logging for enabled check",
+        "de": "Erweitertes Config-Logging für Aktivierungsprüfung hinzugefügt"
+      },
       "0.0.6": {
         "en": "Fix config key mapping (flat structure)",
         "de": "Konfigurations-Key Mapping repariert (flache Struktur)"
