@@ -1,8 +1,16 @@
 {
   "common": {
     "name": "tankmonitor",
-    "version": "0.1.4",
+    "version": "0.1.6",
     "news": {
+      "0.1.6": {
+        "en": "Tankinhaltsanzeige: Use /api/stationen JSON endpoint instead of HTML parsing (reliable data with correct station IDs and values)",
+        "de": "Tankinhaltsanzeige: JSON-Endpunkt /api/stationen statt HTML-Parsing (zuverlässige Daten mit korrekten Stations-IDs und Werten)"
+      },
+      "0.1.5": {
+        "en": "LiquidCheck: Fix ds/query 500 error by adding Origin/Referer/X-Requested-With headers (Grafana 6.x)",
+        "de": "LiquidCheck: 500-Fehler bei /api/ds/query behoben durch Origin/Referer/X-Requested-With Header (Grafana 6.x)"
+      },
       "0.1.3": {
         "en": "Oilview: Fetch full sensor details (value, pct, net_pct, net_free_space, capacity, net_capacity, fill_limit) per tank from /api/v2/devices. LiquidCheck: Fix datasource resolution for panel queries when target.datasource is undefined.",
         "de": "Oilview: Volle Sensor-Details (Bestand Liter, %, Nutzvolumen %, Freiraum, Kapazität, Füllgrenze) pro Tank über /api/v2/devices abfragen. LiquidCheck: Datasource-Auflösung für Panel-Queries repariert wenn target.datasource undefined ist."
