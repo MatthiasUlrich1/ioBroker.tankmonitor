@@ -719,11 +719,44 @@ class LiquidCheckAPI {
         try {
             await this.login();
             if (this.isLoggedIn) {
+                // Datasources abrufen um Prometheus ID zu finden
+                await this.discoverDatasources();
                 await this.discoverDashboards();
                 this.startPolling();
             }
         } catch (e) {
             this.adapter.log.error('[LiquidCheck] Initialisierung fehlgeschlagen: ' + e.message);
+        }
+    }
+
+    /**
+     * Entdeckt verfügbare Datasources (wichtig für Grafana 6.x Proxy)
+     */
+    async discoverDatasources() {
+        try {
+            this.adapter.log.debug('[LiquidCheck] Discovering datasources...');
+            const response = await axios.get(`${this.baseUrl}/api/datasources`, {
+                jar: this.cookieJar,
+                withCredentials: true,
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    'Accept': 'application/json'
+                },
+                timeout: 10000,
+                validateStatus: status => status < 500
+            });
+
+            if (response.status === 200 && Array.isArray(response.data)) {
+                const prom = response.data.find(ds => ds.type === 'prometheus');
+                if (prom) {
+                    this.prometheusId = prom.id;
+                    this.adapter.log.debug(`[LiquidCheck] Prometheus Datasource ID: ${this.prometheusId}`);
+                }
+            }
+        } catch (e) {
+            this.adapter.log.debug('[LiquidCheck] Datasource discovery skipped (normal user): ' + e.message);
+            // Fallback auf ID 115 (aus Browser-Analyse)
+            this.prometheusId = 115;
         }
     }
 
@@ -930,109 +963,67 @@ class LiquidCheckAPI {
 
     /**
      * Holt Daten für ein einzelnes Panel
-     * Grafana 6.x API: POST /api/ds/query
      * 
-     * Grafana 6.7.3 verlangt bei /api/ds/query zwingend ein vollständiges
-     * Datasource-Objekt mit { type, uid, name } pro Target.
-     * Fehlt eines dieser Felder, antwortet der Server mit HTTP 500 "datasource missing name".
+     * Grafana 6.x (LiquidCheck): Nutzt den Prometheus-Proxy-Endpoint direkt
+     *   GET /api/datasources/proxy/{promId}/api/v1/query?query=<expr>
+     * 
+     * Grund: POST /api/ds/query funktioniert auf Grafana 6.7.3 mit
+     * datasource: null im Panel-JSON nicht ("datasource missing name").
+     * Der Proxy-Endpoint ist der native Weg, den auch das Grafana-Frontend
+     * nutzt, und benötigt nur die numerische Datasource-ID.
      */
     async fetchPanelData(dashboardId, panel) {
+        const promId = this.prometheusId || 115;
+
         try {
-            // Standard-Datasource für LiquidCheck (Prometheus)
-            const defaultDatasource = { type: 'prometheus', uid: 'prometheus', name: 'Prometheus' };
-
-            // Datasource aus Panel oder Target ermitteln, sonst Fallback
-            let ds = panel.datasource;
-            if (!ds && panel.targets && panel.targets.length > 0) {
-                ds = panel.targets[0].datasource;
-            }
-
-            let dsObj = defaultDatasource;
-            if (typeof ds === 'string' && ds) {
-                dsObj = { type: 'prometheus', uid: ds, name: ds };
-            } else if (typeof ds === 'object' && ds !== null) {
-                dsObj = {
-                    type: ds.type || 'prometheus',
-                    uid: ds.uid || ds.name || 'prometheus',
-                    name: ds.name || ds.uid || 'Prometheus'
-                };
-            }
-
-            // Targets aufbereiten mit vollständigem Datasource-Objekt
-            const queries = (panel.targets || []).map(target => ({
-                ...target,
-                refId: target.refId || 'A',
-                datasource: (target.datasource && typeof target.datasource === 'object') ? {
-                    type: target.datasource.type || dsObj.type,
-                    uid: target.datasource.uid || target.datasource.name || dsObj.uid,
-                    name: target.datasource.name || target.datasource.uid || dsObj.name
-                } : dsObj
-            }));
-
-            if (queries.length === 0) {
-                this.adapter.log.debug(`[LiquidCheck] Panel "${panel.title || panel.id}": keine Targets`);
-                return;
-            }
-
-            this.adapter.log.debug(`[LiquidCheck] Querying panel "${panel.title || panel.id}": ${queries.length} Target(s), Datasource: ${JSON.stringify(dsObj)}`);
-
-            const queryPayload = {
-                queries,
-                from: 'now-1h',
-                to: 'now'
-            };
-
-            const response = await axios.post(`${this.baseUrl}/api/ds/query`, queryPayload, {
-                jar: this.cookieJar,
-                withCredentials: true,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                    'Accept': 'application/json',
-                    'Origin': this.baseUrl,
-                    'Referer': this.baseUrl + '/d/' + dashboardId,
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                timeout: 15000,
-                validateStatus: status => status < 500
-            });
-
-            if (response.status === 401) {
-                this.adapter.log.warn('[LiquidCheck] Session expired during panel query, re-logging in...');
-                this.isLoggedIn = false;
-                await this.login();
-                if (this.isLoggedIn) {
-                    return await this.fetchPanelData(dashboardId, panel);
+            for (const target of (panel.targets || [])) {
+                if (!target.expr) {
+                    continue;
                 }
-                return;
-            }
 
-            if (response.status >= 400) {
-                this.adapter.log.warn(`[LiquidCheck] Panel "${panel.title || panel.id}": HTTP ${response.status} – ${JSON.stringify(response.data).substring(0, 400)}`);
-                return;
-            }
+                const refId = target.refId || 'A';
+                this.adapter.log.debug(`[LiquidCheck] Prometheus-Query für Panel "${panel.title || panel.id}": ${target.expr}`);
 
-            if (response.data && response.data.results) {
-                for (const [refId, result] of Object.entries(response.data.results)) {
-                    if (result.error) {
-                        this.adapter.log.warn(`[LiquidCheck] Query-Fehler bei "${panel.title || refId}": ${JSON.stringify(result.error)}`);
-                        continue;
+                const response = await axios.get(`${this.baseUrl}/api/datasources/proxy/${promId}/api/v1/query`, {
+                    params: { query: target.expr },
+                    jar: this.cookieJar,
+                    withCredentials: true,
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    timeout: 15000,
+                    validateStatus: status => status < 500
+                });
+
+                if (response.status === 401) {
+                    this.adapter.log.warn('[LiquidCheck] Session abgelaufen, melde mich erneut an...');
+                    this.isLoggedIn = false;
+                    await this.login();
+                    if (this.isLoggedIn) {
+                        // Neu einsteigen: Prom-ID erneut holen (Session ist neu)
+                        await this.discoverDatasources();
+                        return await this.fetchPanelData(dashboardId, panel);
                     }
-                    if (result.frames && result.frames.length > 0) {
-                        const frame = result.frames[0];
-                        if (frame.fields && frame.fields.length > 0) {
-                            const values = frame.fields[0].values || [];
-                            if (values.length > 0) {
-                                const latestValue = values[values.length - 1];
-                                await this.updateDashboardValue(dashboardId, panel.title || refId, latestValue);
+                    return;
+                }
+
+                if (response.status >= 400) {
+                    this.adapter.log.warn(`[LiquidCheck] Prometheus-Query HTTP ${response.status} für "${panel.title || panel.id}": ${JSON.stringify(response.data).substring(0, 400)}`);
+                    continue;
+                }
+
+                // Prometheus-Antwort: { status: 'success', data: { resultType, result: [ { metric, value: [ts, "val"] } ] } }
+                if (response.data && response.data.status === 'success' && response.data.data && Array.isArray(response.data.data.result)) {
+                    const results = response.data.data.result;
+                    if (results.length > 0) {
+                        const valuePair = results[0].value;
+                        if (Array.isArray(valuePair) && valuePair.length >= 2) {
+                            const val = parseFloat(valuePair[1]);
+                            if (!isNaN(val)) {
+                                await this.updateDashboardValue(dashboardId, panel.title || refId, val);
                             }
-                        }
-                    } else if (result.series && result.series.length > 0) {
-                        const series = result.series[0];
-                        const values = series.values && series.values.length > 0 ? series.values[1] : [];
-                        if (values.length > 0) {
-                            const latestValue = values[values.length - 1];
-                            await this.updateDashboardValue(dashboardId, panel.title || refId, latestValue);
                         }
                     }
                 }
